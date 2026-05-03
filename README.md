@@ -34,6 +34,7 @@ See [`docs/setup.md`](./docs/setup.md) for full environment setup.
 - [`docs/data-model.md`](./docs/data-model.md) — Postgres schema
 - [`docs/ai-prompts.md`](./docs/ai-prompts.md) — AI prompts & expected JSON shapes
 - [`docs/ux-principles.md`](./docs/ux-principles.md) — UX rules
+- [`docs/agent-collaboration.md`](./docs/agent-collaboration.md) — how Claude Code and Codex divide UI work
 - [`docs/decisions/`](./docs/decisions/) — architecture decision records
 
 ## License

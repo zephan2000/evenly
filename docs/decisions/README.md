@@ -14,16 +14,17 @@ Each ADR is a short markdown file:
 
 ## Index
 
-| #                                           | Title                                               | Status   |
-| ------------------------------------------- | --------------------------------------------------- | -------- |
-| [0001](./0001-tech-stack.md)                | Tech stack                                          | Accepted |
-| [0002](./0002-vision-model-gemini-flash.md) | Vision model: Gemini 2.0 Flash                      | Accepted |
-| [0003](./0003-hybrid-auth-model.md)         | Hybrid auth: owner authenticated, members optional  | Accepted |
-| [0004](./0004-share-sets.md)                | Share sets, not nested groups                       | Accepted |
-| [0005](./0005-gst-mode-classification.md)   | AI classifies GST mode before extracting values     | Accepted |
-| [0006](./0006-spotlight-wizard-ux.md)       | Spotlight wizard for bill splitting                 | Accepted |
-| [0007](./0007-fx-snapshots.md)              | FX rate snapshots at expense time                   | Accepted |
-| [0008](./0008-impersonation-tradeoff.md)    | Same-name reconciliation accepts impersonation risk | Accepted |
+| #                                            | Title                                               | Status   |
+| -------------------------------------------- | --------------------------------------------------- | -------- |
+| [0001](./0001-tech-stack.md)                 | Tech stack                                          | Accepted |
+| [0002](./0002-vision-model-gemini-flash.md)  | Vision model: Gemini 2.0 Flash                      | Accepted |
+| [0003](./0003-hybrid-auth-model.md)          | Hybrid auth: owner authenticated, members optional  | Accepted |
+| [0004](./0004-share-sets.md)                 | Share sets, not nested groups                       | Accepted |
+| [0005](./0005-gst-mode-classification.md)    | AI classifies GST mode before extracting values     | Accepted |
+| [0006](./0006-spotlight-wizard-ux.md)        | Spotlight wizard for bill splitting                 | Accepted |
+| [0007](./0007-fx-snapshots.md)               | FX rate snapshots at expense time                   | Accepted |
+| [0008](./0008-impersonation-tradeoff.md)     | Same-name reconciliation accepts impersonation risk | Accepted |
+| [0009](./0009-claude-codex-collaboration.md) | Claude + Codex collaboration with Playwright        | Accepted |
 
 ## When to add an ADR
 

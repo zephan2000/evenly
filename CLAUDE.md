@@ -97,6 +97,64 @@ npm run typecheck  # tsc --noEmit (added in package.json)
 - `npm run lint` passes.
 - For UI: `/ux-audit` passes or findings are explicitly accepted.
 
+## Multi-agent collaboration (Claude Code + Codex)
+
+Two agents, distinct roles, with **Playwright** as shared visual ground truth. Full detail in `docs/agent-collaboration.md` and ADR 0009.
+
+### Roles
+
+- **You (Claude Code) = Architect + Builder.** Uses `frontend-design` skill for UI scaffolding (structure, behavior, accessibility). Uses `playwright` skill for self-verification (state coverage, screenshots).
+- **Codex = Senior Reviewer.** Uses `playwright` skill to take screenshots and compare against design references; flags visual mismatches and partial implementations Claude missed. Bounded to UI visuals.
+
+### Required skills
+
+Both agents lean on:
+
+- **`frontend-design`** — opinionated UI generation. Use it explicitly for new screens/components; don't freelance UI from scratch.
+- **`playwright`** — browser automation. Shared visual ground truth for self-verification (you) and review (Codex).
+
+If either skill is unavailable, surface it to the user before doing UI work.
+
+### Per-feature workflow
+
+1. **Scaffold (you, with `frontend-design`).** Layout, hierarchy, type, color tokens, accessibility shape, state machine (empty/loading/error/offline/success). Match `lib/ux/` patterns. Visuals can be placeholder; structure must be solid.
+2. **Self-verify (you, with `playwright`).** Run dev server, navigate the screen, capture screenshots at 375×667 and ≥1024 for default + empty + loading + error states. Run `/ux-audit`.
+3. **Senior Review (`/codex`).** User invokes Codex via `/codex`. Codex uses Playwright to compare against design references, produces a findings report.
+4. **Reconcile.** Address each finding or push back with reasoning. Conflicts with `docs/ux-principles.md` or ADRs → flag to user, never silently merge.
+
+### When to suggest a Codex handoff
+
+Default ending after every UI scaffold + self-verification: **"Ready for /codex Senior Review — want me to draft the brief?"**
+
+Also volunteer Codex when:
+
+- Inventing a UX pattern not covered by `docs/ux-principles.md`
+- Cross-platform UI trade-off with low confidence
+- Visual fidelity matters (post-MVP polish, brand-sensitive screens)
+
+### Brief format when handing off to Codex
+
+```
+Goal: <one sentence>
+Reference: <paths or URLs>
+Files / components: <list>
+Viewports: 375×667 mobile, 1024+ web
+Constraints: follow docs/ux-principles.md
+Out of scope: logic, data, AI, server
+Required output: findings report with screenshots
+```
+
+### Out of scope for Codex
+
+Architecture, data model, RLS, auth, AI prompts, server logic, settlement math. If Codex weighs in on these, treat as low-signal unless the user explicitly asks otherwise.
+
+### Anti-patterns
+
+- Shipping UI without `playwright` self-verification.
+- Skipping `frontend-design` and freelancing UI from scratch.
+- Skipping `/ux-audit` because "Codex will catch it" — both run; overlap but not equivalent.
+- Silently merging Codex suggestions that conflict with our docs.
+
 ## Decisions you should NOT relitigate
 
 These are settled. If you think one is wrong, raise it explicitly with the user; don't quietly change it:
