@@ -1,50 +1,41 @@
-# Welcome to your Expo app 👋
+# Evenly
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AI-powered expense tracking for group trips. Scan a receipt, split it cleanly.
 
-## Get started
+## What's different
 
-1. Install dependencies
+- **Receipt-first:** scan a receipt, AI extracts items + GST + service charge automatically.
+- **Spotlight wizard:** instead of tedious per-person screens, a single guided flow with smart defaults.
+- **No accounts required for members:** trip owner signs in; everyone else joins via share link.
+- **GST-aware:** correctly distributes Singapore GST and service charge proportionally.
+- **Multi-currency:** captures FX rate at expense time so settlements match what you actually paid.
 
-   ```bash
-   npm install
-   ```
+## Status
 
-2. Start the app
+Early development. MVP in progress.
 
-   ```bash
-   npx expo start
-   ```
+## Tech
 
-In the output, you'll find options to open the app in a
+Expo + Expo Router (mobile + web), Supabase, Clerk, Gemini 2.0 Flash, Vercel.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Local development
 
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env.local   # then fill in keys
+npm run start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+See [`docs/setup.md`](./docs/setup.md) for full environment setup.
 
-## Learn more
+## Documentation
 
-To learn more about developing your project with Expo, look at the following resources:
+- [`CLAUDE.md`](./CLAUDE.md) — context for AI agents working in this repo
+- [`docs/data-model.md`](./docs/data-model.md) — Postgres schema
+- [`docs/ai-prompts.md`](./docs/ai-prompts.md) — AI prompts & expected JSON shapes
+- [`docs/ux-principles.md`](./docs/ux-principles.md) — UX rules
+- [`docs/decisions/`](./docs/decisions/) — architecture decision records
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## License
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+TBD.
