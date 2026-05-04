@@ -26,7 +26,7 @@ cp .env.example .env.local
 ### Supabase
 
 1. Create a project at https://supabase.com/dashboard.
-2. Project Settings → API → copy URL and `anon` key into `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+2. Project Settings → API → copy URL and `anon` key into `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY`.
 3. Copy `service_role` key into `SUPABASE_SERVICE_ROLE_KEY` (server-only, never expose).
 4. Run migrations: `npm run db:migrate` (sets up the schema in `supabase/migrations/`).
 

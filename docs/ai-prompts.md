@@ -4,11 +4,13 @@ Authoritative source for every prompt sent to Gemini (or fallback). When you cha
 
 ## Provider chain
 
-1. **Primary:** Gemini 2.0 Flash (`gemini-2.0-flash-exp`) via `@google/generative-ai`. Free tier: 1500 req/day per key.
-2. **Fallback:** Qwen2.5-VL-72B via OpenRouter or Hyperbolic. Triggered on rate limit (429) or 5xx after 1 retry.
+1. **Primary:** Gemini 2.0 Flash via OpenRouter (`google/gemini-2.0-flash-exp`). Single SDK + single API key (`OPENROUTER_API_KEY`). Google's upstream free-tier limit (1500 req/day) is enforced through OpenRouter.
+2. **Fallback:** Qwen2.5-VL-72B via OpenRouter (`qwen/qwen2.5-vl-72b-instruct`). Triggered on rate limit (429) or 5xx after 1 retry.
 3. **Last resort:** Surface error to user with "AI extraction unavailable, please enter manually."
 
 Implementation: `lib/ai/extract.ts`. The fallback chain is wrapped in a single function that returns `Result<ExtractedExpense, ExtractionError>`.
+
+**Provider-shared-failure caveat:** primary and fallback both go through OpenRouter, so an OpenRouter outage takes both down (see ADR 0002 revision 2026-05-04). The "last resort" path — manual entry — is the only remaining option in that case.
 
 ## Prompt 1 — Receipt extraction
 
@@ -52,7 +54,7 @@ CRITICAL RULES:
    - "exclusive" if there is a separate line itemizing GST/VAT/Service Tax added on top.
    - "none" if no tax appears anywhere.
 2. If tax_mode = "exclusive", subtotal_cents + service_charge_cents + tip_cents + tax_amount_cents MUST equal total_cents (within 1 cent).
-3. If tax_mode = "inclusive", subtotal_cents represents the line items as displayed (already including tax). tax_amount_cents is the embedded tax amount, computed as total - total/(1+tax_rate). If tax rate is unclear, set tax_amount_cents to 0 and set notes accordingly.
+3. If tax_mode = "inclusive", subtotal_cents represents the line items as displayed (already including tax). tax_amount_cents is the embedded tax amount, computed as total - total/(1+tax_rate). If the tax rate is unclear, set tax_amount_cents to 0 and explain in notes. Singapore GST is 9% (effective 2024-01-01); use that as the default rate when SGD + GST signals are present and no other rate is stated.
 4. service_charge is mandatory restaurant fees (typically 10% in Singapore). tip is voluntary. Do not conflate.
 5. Currency: infer from symbols ($, S$, RM, ¥, €, £) and merchant location hints. If genuinely ambiguous, pick the most likely and mention in notes.
 6. Items: extract every line item. If items are not itemized (e.g., total-only receipt), return an empty array and rely on subtotal/total.
@@ -64,6 +66,7 @@ CRITICAL RULES:
 
 - JSON.parse must succeed; if not → fallback or surface error.
 - Zod schema validation in `lib/ai/schema.ts`.
+- **Collapse `tax_mode = "none"` → `"inclusive"` with `tax_amount_cents = 0`** before persisting. The DB column (`expenses.tax_mode`) only carries `'inclusive' | 'exclusive'` (see `docs/data-model.md`); the AI's three-way classification is internal to the parser. Math invariant after collapse remains `subtotal + service + tip + tax ≈ total` within 1¢; for the collapsed case, tax = 0 so it reduces to `subtotal + service + tip ≈ total`.
 - Math check: `subtotal + service + tip + tax ≈ total` within 1¢. If fails, set `confidence.overall = min(0.5, confidence.overall)` and flag `notes`.
 - Currency must be a valid ISO 4217 code. If unknown, default to trip's home currency and flag.
 
@@ -85,6 +88,8 @@ When you change a prompt:
 ## Changelog
 
 - **2026-05-03** — Initial prompt drafted. Covers SG GST inclusive/exclusive classification + multi-currency.
+- **2026-05-04** — Parser now collapses `tax_mode = "none"` → `"inclusive"` with `tax_amount_cents = 0` before persisting, so the DB enum stays two-valued (`inclusive | exclusive`). Added explicit SG GST default rate (9%) for inclusive-mode embedded-tax math when no rate is stated.
+- **2026-05-04** — Provider chain now routes Gemini Flash through OpenRouter (was direct Google AI Studio API). See ADR 0002 revision for rationale and the single-provider-failure tradeoff.
 
 ## Testing
 
