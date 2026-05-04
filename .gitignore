@@ -42,3 +42,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Local-only reference assets (third-party design inspiration, not for redistribution)
+design-inspiration/
