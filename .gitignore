@@ -45,3 +45,7 @@ app-example
 
 # Local-only reference assets (third-party design inspiration, not for redistribution)
 design-inspiration/
+
+# Playwright self-verify artifacts — screenshots, console logs, snapshots
+dev-components-*.png
+.playwright-mcp/
