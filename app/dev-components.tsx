@@ -9,9 +9,11 @@ import {
   Banner,
   Button,
   Card,
+  CategoryIcon,
   Chip,
   EmptyState,
   ListRow,
+  ReceiptThumbnail,
   SegmentedControl,
   Skeleton,
   Text,
@@ -183,22 +185,67 @@ export default function DevComponentsScreen() {
           </Card>
         </Section>
 
+        <Section title="CategoryIcon — six categories">
+          <View style={styles.row}>
+            <View style={styles.categoryDemo}>
+              <CategoryIcon category="meals" />
+              <Text variant="caption" color="textSecondary">
+                Meals
+              </Text>
+            </View>
+            <View style={styles.categoryDemo}>
+              <CategoryIcon category="transport" />
+              <Text variant="caption" color="textSecondary">
+                Transport
+              </Text>
+            </View>
+            <View style={styles.categoryDemo}>
+              <CategoryIcon category="lodging" />
+              <Text variant="caption" color="textSecondary">
+                Lodging
+              </Text>
+            </View>
+            <View style={styles.categoryDemo}>
+              <CategoryIcon category="entertainment" />
+              <Text variant="caption" color="textSecondary">
+                Entertainment
+              </Text>
+            </View>
+            <View style={styles.categoryDemo}>
+              <CategoryIcon category="groceries" />
+              <Text variant="caption" color="textSecondary">
+                Groceries
+              </Text>
+            </View>
+            <View style={styles.categoryDemo}>
+              <CategoryIcon category="other" />
+              <Text variant="caption" color="textSecondary">
+                Other
+              </Text>
+            </View>
+          </View>
+          <View style={styles.row}>
+            <CategoryIcon category="meals" size={28} />
+            <CategoryIcon category="meals" size={40} />
+            <CategoryIcon category="meals" size={56} />
+            <CategoryIcon category="meals" size={72} />
+          </View>
+        </Section>
+
+        <Section title="ReceiptThumbnail">
+          <View style={styles.row}>
+            <ReceiptThumbnail caption="receipt-001.jpg" />
+            <ReceiptThumbnail caption="Tap to preview" onPress={() => {}} />
+            <ReceiptThumbnail size={72} caption="72pt variant" />
+          </View>
+        </Section>
+
         <Section title="ListRow">
           <Card padding={0}>
             <ListRow
               title="Hawker Heaven"
               subtitle="Today · Meals"
-              leading={
-                <View style={[styles.categoryStub, { backgroundColor: Category.meals.tint }]}>
-                  <Text
-                    variant="bodyStrong"
-                    color="textPrimary"
-                    style={{ color: Category.meals.glyph }}
-                  >
-                    🍴
-                  </Text>
-                </View>
-              }
+              leading={<CategoryIcon category="meals" />}
               trailing={
                 <Text variant="bodyStrong" tabularNums>
                   S$20.38
@@ -209,13 +256,7 @@ export default function DevComponentsScreen() {
             <ListRow
               title="Grab to Ubud"
               subtitle="Yesterday · Transport"
-              leading={
-                <View style={[styles.categoryStub, { backgroundColor: Category.transport.tint }]}>
-                  <Text variant="bodyStrong" style={{ color: Category.transport.glyph }}>
-                    🚕
-                  </Text>
-                </View>
-              }
+              leading={<CategoryIcon category="transport" />}
               trailing={
                 <Text variant="bodyStrong" tabularNums>
                   S$14.00
@@ -226,13 +267,7 @@ export default function DevComponentsScreen() {
             <ListRow
               title="The Ritz Bali"
               subtitle="Apr 12 · Lodging"
-              leading={
-                <View style={[styles.categoryStub, { backgroundColor: Category.lodging.tint }]}>
-                  <Text variant="bodyStrong" style={{ color: Category.lodging.glyph }}>
-                    🏨
-                  </Text>
-                </View>
-              }
+              leading={<CategoryIcon category="lodging" />}
               trailing={
                 <Text variant="bodyStrong" tabularNums>
                   S$398.00
@@ -349,12 +384,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Neutral.borderSubtle,
   },
-  // Placeholder for the category icon tile until chunk 2c ships CategoryIcon.
-  categoryStub: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  categoryDemo: {
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    minWidth: 64,
   },
 });
