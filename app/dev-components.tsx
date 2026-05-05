@@ -2,13 +2,37 @@
 // production navigation. Open at /dev-components in the dev server.
 
 import { Stack } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { Banner, Button, Card, EmptyState, Skeleton, Text } from '@/components/ui';
-import { Neutral, Space } from '@/constants/theme';
+import {
+  Banner,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ListRow,
+  SegmentedControl,
+  Skeleton,
+  Text,
+  TextInput,
+} from '@/components/ui';
+import { Category, Neutral, Space } from '@/constants/theme';
+
+const TAX_MODE_OPTIONS = [
+  { label: 'Inclusive', value: 'inclusive' },
+  { label: 'Exclusive', value: 'exclusive' },
+] as const;
+
+const CURRENCIES = ['SGD', 'USD', 'EUR', 'MYR', 'JPY'] as const;
 
 export default function DevComponentsScreen() {
+  const [merchant, setMerchant] = useState('Hawker Heaven');
+  const [notes, setNotes] = useState('');
+  const [merchantError, setMerchantError] = useState('');
+  const [taxMode, setTaxMode] = useState<'inclusive' | 'exclusive'>('exclusive');
+  const [currency, setCurrency] = useState<(typeof CURRENCIES)[number]>('SGD');
+
   return (
     <>
       <Stack.Screen options={{ title: 'Components' }} />
@@ -68,6 +92,76 @@ export default function DevComponentsScreen() {
           />
         </Section>
 
+        <Section title="TextInput">
+          <TextInput
+            label="Merchant"
+            value={merchant}
+            onChangeText={setMerchant}
+            placeholder="e.g., Hawker Heaven"
+          />
+          <TextInput
+            label="With helper"
+            value=""
+            onChangeText={() => {}}
+            placeholder="Helper text below"
+            helper="ISO 4217 currency code, three letters."
+          />
+          <TextInput
+            label="With error"
+            value="invalid"
+            onChangeText={() => {}}
+            error="Looks like a typo — currencies are 3-letter codes."
+          />
+          <View style={styles.row}>
+            <Button
+              label={merchantError ? 'Clear error' : 'Trigger error'}
+              variant="ghost"
+              size="sm"
+              onPress={() => setMerchantError(merchantError ? '' : 'Merchant is required')}
+            />
+          </View>
+          <TextInput
+            label="Disabled"
+            value="Cannot edit this"
+            onChangeText={() => {}}
+            editable={false}
+          />
+          <TextInput
+            label="Notes (multi-line)"
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Anything to remember about this expense?"
+            multiline
+          />
+        </Section>
+
+        <Section title="Chip — selectable, with leading dot">
+          <View style={styles.row}>
+            {CURRENCIES.map((c) => (
+              <Chip key={c} label={c} selected={currency === c} onPress={() => setCurrency(c)} />
+            ))}
+          </View>
+          <View style={styles.row}>
+            <Chip label="Meals" leadingDot={Category.meals.icon} />
+            <Chip label="Transport" leadingDot={Category.transport.icon} />
+            <Chip label="Lodging" leadingDot={Category.lodging.icon} />
+            <Chip label="Entertainment" leadingDot={Category.entertainment.icon} />
+            <Chip label="Disabled" disabled />
+          </View>
+        </Section>
+
+        <Section title="SegmentedControl">
+          <SegmentedControl
+            options={TAX_MODE_OPTIONS}
+            value={taxMode}
+            onChange={setTaxMode}
+            accessibilityLabel="Tax mode"
+          />
+          <Text variant="caption" color="textSecondary">
+            Active: {taxMode}
+          </Text>
+        </Section>
+
         <Section title="Card">
           <Card>
             <Text variant="subtitle">Default card (flat)</Text>
@@ -86,6 +180,67 @@ export default function DevComponentsScreen() {
             <Text variant="body" color="textSecondary">
               Tappable. Whole surface is the press target.
             </Text>
+          </Card>
+        </Section>
+
+        <Section title="ListRow">
+          <Card padding={0}>
+            <ListRow
+              title="Hawker Heaven"
+              subtitle="Today · Meals"
+              leading={
+                <View style={[styles.categoryStub, { backgroundColor: Category.meals.tint }]}>
+                  <Text
+                    variant="bodyStrong"
+                    color="textPrimary"
+                    style={{ color: Category.meals.glyph }}
+                  >
+                    🍴
+                  </Text>
+                </View>
+              }
+              trailing={
+                <Text variant="bodyStrong" tabularNums>
+                  S$20.38
+                </Text>
+              }
+              onPress={() => {}}
+            />
+            <ListRow
+              title="Grab to Ubud"
+              subtitle="Yesterday · Transport"
+              leading={
+                <View style={[styles.categoryStub, { backgroundColor: Category.transport.tint }]}>
+                  <Text variant="bodyStrong" style={{ color: Category.transport.glyph }}>
+                    🚕
+                  </Text>
+                </View>
+              }
+              trailing={
+                <Text variant="bodyStrong" tabularNums>
+                  S$14.00
+                </Text>
+              }
+              onPress={() => {}}
+            />
+            <ListRow
+              title="The Ritz Bali"
+              subtitle="Apr 12 · Lodging"
+              leading={
+                <View style={[styles.categoryStub, { backgroundColor: Category.lodging.tint }]}>
+                  <Text variant="bodyStrong" style={{ color: Category.lodging.glyph }}>
+                    🏨
+                  </Text>
+                </View>
+              }
+              trailing={
+                <Text variant="bodyStrong" tabularNums>
+                  S$398.00
+                </Text>
+              }
+              separator={false}
+              onPress={() => {}}
+            />
           </Card>
         </Section>
 
@@ -193,5 +348,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Neutral.borderSubtle,
+  },
+  // Placeholder for the category icon tile until chunk 2c ships CategoryIcon.
+  categoryStub: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
