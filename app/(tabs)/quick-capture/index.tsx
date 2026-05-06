@@ -9,8 +9,9 @@
 // batch" CTA; real expo-image-picker integration replaces that stub when
 // the home screen wires the entry point.
 
+import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -27,12 +28,16 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Text } from '@/components/ui/text';
 import { Brand, Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
+import { createRealDeps } from '@/lib/quick-capture/deps';
+import { runExtractions, runUploads } from '@/lib/quick-capture/orchestrator';
+import { pickReceiptImages } from '@/lib/quick-capture/picker';
 import {
   type BatchDraft,
   type DraftExpense,
   flaggedDraftCount,
   hasUnsavedDrafts,
   isBatchTerminal,
+  MAX_BATCH_IMAGES,
   processingDraftCount,
   reducer,
   readyDraftCount,
@@ -86,8 +91,20 @@ type TripPickerState =
   | { kind: 'batch' }
   | { kind: 'single_card'; draftId: string };
 
+// Demo-batch URIs are placeholder URLs; real picker output is local file:// or
+// http(s)://. We gate the in-memory simulator on this prefix so real batches
+// run through the actual orchestrator instead.
+const DEMO_URI_PREFIX = 'https://placehold.co';
+
+function isDemoDraft(d: DraftExpense): boolean {
+  return d.imageUri.startsWith(DEMO_URI_PREFIX);
+}
+
 export default function QuickCaptureTrayScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ imageUris?: string; tripId?: string }>();
+  const { getToken, isSignedIn } = useAuth();
+
   const [state, dispatch] = useReducer(reducer, undefined, emptyBatch);
   const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
   const [tripPicker, setTripPicker] = useState<TripPickerState>({ kind: 'closed' });
@@ -97,6 +114,14 @@ export default function QuickCaptureTrayScreen() {
   const saveConfirmRef = useRef<BottomSheetHandle>(null);
   const disablePerReceiptConfirmRef = useRef<BottomSheetHandle>(null);
   const saveAllConfirmRef = useRef<BottomSheetHandle>(null);
+
+  // One-shot guard so route params don't re-init on every render.
+  const initFromParamsRef = useRef<string | null>(null);
+  // Phase-in-flight guards for the real orchestrator. Each phase filters by
+  // status so re-entry is safe in principle, but we still avoid concurrent
+  // runs to prevent dispatching duplicate STARTED actions for the same draft.
+  const uploadInFlightRef = useRef(false);
+  const extractInFlightRef = useRef(false);
 
   const tripById = useMemo(() => {
     return MOCK_TRIPS.reduce<Record<string, TripSummary>>((acc, t) => {
@@ -116,9 +141,109 @@ export default function QuickCaptureTrayScreen() {
   const saved = savedDraftCount(state);
   const allSaved = visibleDrafts.length > 0 && isBatchTerminal(state) && saved > 0;
 
-  // Demo-batch initializer — seeds 6 drafts in varied states so the tray can
-  // be visually verified without wiring expo-image-picker. Replaced by real
-  // picker integration when the home-screen entry point lands.
+  const isRealBatch = visibleDrafts.length > 0 && !isDemoDraft(visibleDrafts[0]);
+
+  // Real orchestrator deps. Created lazily — null until we have a signed-in
+  // session and a trip context (currently from route params; future: from a
+  // current-trip provider). Save dep is left without saveContext for now;
+  // wiring trip-member resolution is a follow-up before the bulk save can
+  // round-trip end-to-end.
+  const realDeps = useMemo(() => {
+    if (!isRealBatch) return null;
+    if (!isSignedIn) return null;
+    if (!state.defaultTripId) return null;
+    return createRealDeps({
+      getToken: async () => getToken({ template: 'supabase' }),
+      uploadTripId: state.defaultTripId,
+    });
+  }, [isRealBatch, isSignedIn, getToken, state.defaultTripId]);
+
+  // ─── Initialize batch from route params (real picker landing) ──────────
+  useEffect(() => {
+    const raw = params.imageUris;
+    if (!raw) return;
+    if (initFromParamsRef.current === raw) return;
+    initFromParamsRef.current = raw;
+
+    let uris: unknown;
+    try {
+      uris = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (!Array.isArray(uris) || uris.length === 0) return;
+    const sliced = (uris as unknown[])
+      .filter((u): u is string => typeof u === 'string')
+      .slice(0, MAX_BATCH_IMAGES);
+    if (sliced.length === 0) return;
+
+    const tripId = params.tripId ?? DEFAULT_TRIP_ID;
+    dispatch({
+      type: 'INIT_BATCH',
+      batchId: `batch-${Date.now()}`,
+      defaultTripId: tripId,
+      images: sliced.map((uri, i) => ({
+        id: `picked-${Date.now()}-${i}`,
+        imageUri: uri,
+      })),
+      createdAt: new Date().toISOString(),
+    });
+  }, [params.imageUris, params.tripId]);
+
+  // ─── Real orchestrator: run uploads when there's pending work ──────────
+  useEffect(() => {
+    if (!realDeps) return;
+    const hasPending = state.drafts.some((d) => d.status === 'pending_upload');
+    if (!hasPending) return;
+    if (uploadInFlightRef.current) return;
+
+    uploadInFlightRef.current = true;
+    runUploads(state, dispatch, realDeps).finally(() => {
+      uploadInFlightRef.current = false;
+    });
+  }, [state, realDeps]);
+
+  // ─── Real orchestrator: run extractions when uploads complete ──────────
+  useEffect(() => {
+    if (!realDeps) return;
+    const hasExtracting = state.drafts.some(
+      (d) => d.status === 'extracting' && d.uploadedKey !== null && d.extracted === null,
+    );
+    if (!hasExtracting) return;
+    if (extractInFlightRef.current) return;
+
+    extractInFlightRef.current = true;
+    runExtractions(state, dispatch, realDeps).finally(() => {
+      extractInFlightRef.current = false;
+    });
+  }, [state, realDeps]);
+
+  // ─── Picker integration ────────────────────────────────────────────────
+
+  const handlePickReceipts = useCallback(async () => {
+    const result = await pickReceiptImages();
+    if (result.kind === 'permission_denied') {
+      Alert.alert('Photo access needed', 'Allow photo access to scan receipts.');
+      return;
+    }
+    if (result.kind === 'cancelled') return;
+    if (result.images.length === 0) return;
+    if (result.truncated) {
+      Alert.alert('Some receipts skipped', `Only the first ${MAX_BATCH_IMAGES} will be processed.`);
+    }
+    // Re-mount this screen with the picked URIs in route params. INIT_BATCH
+    // fires once via the param-watching effect, then the real orchestrator
+    // takes over.
+    router.replace({
+      pathname: '/(tabs)/quick-capture',
+      params: {
+        imageUris: JSON.stringify(result.images.map((i) => i.uri)),
+        tripId: DEFAULT_TRIP_ID,
+      },
+    });
+  }, [router]);
+
+  // ─── Demo-batch initializer (visual review only) ───────────────────────
   const seedDemoBatch = useCallback(() => {
     const id = (n: number) => `demo-${Date.now()}-${n}`;
     const now = new Date().toISOString();
@@ -128,15 +253,21 @@ export default function QuickCaptureTrayScreen() {
       defaultTripId: DEFAULT_TRIP_ID,
       images: Array.from({ length: 6 }, (_, i) => ({
         id: id(i),
-        imageUri: 'https://placehold.co/200x260/F4F9FF/16233B?text=Receipt',
+        imageUri: `${DEMO_URI_PREFIX}/200x260/F4F9FF/16233B?text=Receipt`,
       })),
       createdAt: now,
     });
   }, []);
 
-  // Drive a fake orchestration so the demo batch progresses through states.
-  // Real impl will live in the parent flow that owns `runUploads`/`runExtractions`.
+  // Demo-only simulator — drives a fake orchestration so the placeholder
+  // batch progresses through states for visual review. Gated on the
+  // demo-uri prefix so real picker batches go through the orchestrator
+  // effects above instead.
   useEffect(() => {
+    if (state.drafts.length === 0) return;
+    if (!isDemoDraft(state.drafts[0])) return;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
     state.drafts.forEach((d, idx) => {
       if (d.status !== 'pending_upload') return;
       const isFailureCase = idx === 4;
@@ -144,56 +275,51 @@ export default function QuickCaptureTrayScreen() {
       const uploadDelay = 600 + idx * 120;
       const extractDelay = uploadDelay + 1200 + idx * 80;
 
-      const t1 = setTimeout(() => {
-        dispatch({ type: 'UPLOAD_STARTED', draftId: d.id });
-      }, 200);
-      const t2 = setTimeout(() => {
-        if (isFailureCase) {
-          dispatch({
-            type: 'UPLOAD_FAILED',
-            draftId: d.id,
-            error: { code: 'NET', message: 'Network timed out' },
-          });
-        } else {
-          dispatch({ type: 'UPLOAD_SUCCEEDED', draftId: d.id, uploadedKey: `key-${d.id}` });
-        }
-      }, uploadDelay);
-      const t3 = setTimeout(() => {
-        if (isFailureCase) return;
-        if (isLowConf) {
-          dispatch({
-            type: 'EXTRACT_SUCCEEDED',
-            draftId: d.id,
-            extracted: {
-              ...MOCK_EXTRACTED,
-              merchant: 'Roadside cafe',
-              total_cents: 880,
-              confidence: { overall: 0.5, items: 0.5, totals: 0.55 },
-            },
-          });
-        } else {
-          dispatch({
-            type: 'EXTRACT_SUCCEEDED',
-            draftId: d.id,
-            extracted: {
-              ...MOCK_EXTRACTED,
-              merchant: idx === 0 ? 'Hawker Heaven' : `Receipt ${idx + 1}`,
-              total_cents: 1426 + idx * 530,
-            },
-          });
-        }
-      }, extractDelay);
-
-      // Returning a cleanup from a forEach doesn't work directly; rely on
-      // the screen unmount clearing pending timers via the outer cleanup.
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
+      timers.push(setTimeout(() => dispatch({ type: 'UPLOAD_STARTED', draftId: d.id }), 200));
+      timers.push(
+        setTimeout(() => {
+          if (isFailureCase) {
+            dispatch({
+              type: 'UPLOAD_FAILED',
+              draftId: d.id,
+              error: { code: 'NET', message: 'Network timed out' },
+            });
+          } else {
+            dispatch({ type: 'UPLOAD_SUCCEEDED', draftId: d.id, uploadedKey: `key-${d.id}` });
+          }
+        }, uploadDelay),
+      );
+      timers.push(
+        setTimeout(() => {
+          if (isFailureCase) return;
+          if (isLowConf) {
+            dispatch({
+              type: 'EXTRACT_SUCCEEDED',
+              draftId: d.id,
+              extracted: {
+                ...MOCK_EXTRACTED,
+                merchant: 'Roadside cafe',
+                total_cents: 880,
+                confidence: { overall: 0.5, items: 0.5, totals: 0.55 },
+              },
+            });
+          } else {
+            dispatch({
+              type: 'EXTRACT_SUCCEEDED',
+              draftId: d.id,
+              extracted: {
+                ...MOCK_EXTRACTED,
+                merchant: idx === 0 ? 'Hawker Heaven' : `Receipt ${idx + 1}`,
+                total_cents: 1426 + idx * 530,
+              },
+            });
+          }
+        }, extractDelay),
+      );
     });
-    // We intentionally only react to drafts changing identity; draft mutations
-    // inside don't need to re-trigger the simulator.
+    return () => timers.forEach(clearTimeout);
+    // We intentionally only re-fire when the draft count changes — mutations
+    // inside drafts shouldn't restart the simulator.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.drafts.length]);
 
@@ -375,8 +501,11 @@ export default function QuickCaptureTrayScreen() {
             illustration={<Text variant="displayXl">🧾</Text>}
             title="Nothing in the inbox yet"
             description="Pick up to 8 receipts to start a quick capture."
-            cta={{ label: 'Start demo batch', onPress: seedDemoBatch }}
+            cta={{ label: 'Pick receipts', onPress: handlePickReceipts }}
           />
+          <View style={styles.emptySecondary}>
+            <Button label="Start demo batch" variant="ghost" size="sm" onPress={seedDemoBatch} />
+          </View>
         </ScrollView>
       </View>
     );
@@ -681,6 +810,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Space[16],
     paddingTop: Space[40],
+  },
+  emptySecondary: {
+    alignItems: 'center',
+    marginTop: Space[16],
   },
   footer: {
     position: 'absolute',

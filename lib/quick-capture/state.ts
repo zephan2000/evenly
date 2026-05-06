@@ -73,6 +73,9 @@ export function visibleStatusOf(d: DraftExpense): VisibleStatus {
 // fields ARE the review surface.
 export const NEEDS_REVIEW_CONFIDENCE_THRESHOLD = 0.7;
 
+// Max receipts in one batch per spec §5.1.
+export const MAX_BATCH_IMAGES = 8;
+
 export function shouldFlagForReview(extracted: ExtractedExpense): boolean {
   if (extracted.confidence.overall < NEEDS_REVIEW_CONFIDENCE_THRESHOLD) return true;
   if (!extracted.merchant.trim()) return true;
