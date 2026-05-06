@@ -25,9 +25,12 @@ import { BottomSheet, type BottomSheetHandle } from '@/components/ui/bottom-shee
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { TextInput } from '@/components/ui/text-input';
 import { Brand, Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
+import { createTrip, listTrips, type TripRecord } from '@/lib/db/trips';
 import { createRealDeps } from '@/lib/quick-capture/deps';
 import { runExtractions, runUploads } from '@/lib/quick-capture/orchestrator';
 import { pickReceiptImages } from '@/lib/quick-capture/picker';
@@ -46,13 +49,9 @@ import {
 
 // ─── Mock data for the demo flow ─────────────────────────────────────────
 
-const MOCK_TRIPS: TripSummary[] = [
-  { id: 'trip-bali', name: 'Bali Apr 2026' },
-  { id: 'trip-tokyo', name: 'Tokyo Mar 2026' },
-  { id: 'trip-kyoto', name: 'Kyoto Mar 2026' },
-];
-
-const DEFAULT_TRIP_ID = MOCK_TRIPS[0].id;
+// Synthetic placeholder trip used only by the demo-batch simulator (visual
+// review path). Real picker batches always use a fetched TripRecord.
+const DEMO_PLACEHOLDER_TRIP: TripSummary = { id: 'demo-trip', name: 'Demo trip' };
 
 const MOCK_EXTRACTED: ExtractedExpense = {
   merchant: 'Hawker Heaven',
@@ -75,7 +74,7 @@ function emptyBatch(): BatchDraft {
   return {
     id: '',
     serverId: null,
-    defaultTripId: DEFAULT_TRIP_ID,
+    defaultTripId: '',
     tripMode: 'batch',
     createdAt: '',
     drafts: [],
@@ -83,6 +82,13 @@ function emptyBatch(): BatchDraft {
     cursorIndex: 0,
   };
 }
+
+// ─── Trips fetch state ───────────────────────────────────────────────────
+
+type TripsState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; trips: TripRecord[] }
+  | { kind: 'error'; message: string };
 
 // ─── Screen ──────────────────────────────────────────────────────────────
 
@@ -109,11 +115,18 @@ export default function QuickCaptureTrayScreen() {
   const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
   const [tripPicker, setTripPicker] = useState<TripPickerState>({ kind: 'closed' });
   const [pendingDisablePerReceipt, setPendingDisablePerReceipt] = useState<string | null>(null);
+  const [tripsState, setTripsState] = useState<TripsState>({ kind: 'loading' });
+  const [createTripForm, setCreateTripForm] = useState<{ name: string; currency: string }>({
+    name: '',
+    currency: 'SGD',
+  });
+  const [creatingTrip, setCreatingTrip] = useState(false);
 
   const tripPickerRef = useRef<BottomSheetHandle>(null);
   const saveConfirmRef = useRef<BottomSheetHandle>(null);
   const disablePerReceiptConfirmRef = useRef<BottomSheetHandle>(null);
   const saveAllConfirmRef = useRef<BottomSheetHandle>(null);
+  const createTripSheetRef = useRef<BottomSheetHandle>(null);
 
   // One-shot guard so route params don't re-init on every render.
   const initFromParamsRef = useRef<string | null>(null);
@@ -123,12 +136,44 @@ export default function QuickCaptureTrayScreen() {
   const uploadInFlightRef = useRef(false);
   const extractInFlightRef = useRef(false);
 
+  const trips = useMemo<TripRecord[]>(
+    () => (tripsState.kind === 'ready' ? tripsState.trips : []),
+    [tripsState],
+  );
+  const currentTrip = trips[0] ?? null;
+
   const tripById = useMemo(() => {
-    return MOCK_TRIPS.reduce<Record<string, TripSummary>>((acc, t) => {
-      acc[t.id] = t;
-      return acc;
-    }, {});
-  }, []);
+    const acc: Record<string, TripSummary> = {
+      [DEMO_PLACEHOLDER_TRIP.id]: DEMO_PLACEHOLDER_TRIP,
+    };
+    for (const t of trips) acc[t.id] = { id: t.id, name: t.name };
+    return acc;
+  }, [trips]);
+
+  const tripPickerTrips = useMemo<TripSummary[]>(
+    () => trips.map((t) => ({ id: t.id, name: t.name })),
+    [trips],
+  );
+
+  const refetchTrips = useCallback(async () => {
+    setTripsState({ kind: 'loading' });
+    try {
+      const list = await listTrips(async () => getToken({ template: 'supabase' }));
+      setTripsState({ kind: 'ready', trips: list });
+    } catch (e) {
+      setTripsState({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Failed to load trips',
+      });
+    }
+  }, [getToken]);
+
+  // Fetch trips on mount once Clerk reports a signed-in session.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    if (tripsState.kind !== 'loading') return;
+    void refetchTrips();
+  }, [isSignedIn, tripsState.kind, refetchTrips]);
 
   const visibleDrafts = useMemo(
     () => state.drafts.filter((d) => d.status !== 'discarded'),
@@ -144,40 +189,55 @@ export default function QuickCaptureTrayScreen() {
   const isRealBatch = visibleDrafts.length > 0 && !isDemoDraft(visibleDrafts[0]);
 
   // Real orchestrator deps. Created lazily — null until we have a signed-in
-  // session and a trip context (currently from route params; future: from a
-  // current-trip provider). Save dep is left without saveContext for now;
-  // wiring trip-member resolution is a follow-up before the bulk save can
-  // round-trip end-to-end.
+  // session, a fetched trip, and a real (non-demo) batch. saveContext uses the
+  // owner's trip_member id for both payer and creator: the current user paid
+  // and entered the receipt themselves. Per-card payer override is post-MVP.
   const realDeps = useMemo(() => {
     if (!isRealBatch) return null;
     if (!isSignedIn) return null;
     if (!state.defaultTripId) return null;
+    const tripForBatch = trips.find((t) => t.id === state.defaultTripId);
+    if (!tripForBatch) return null;
     return createRealDeps({
       getToken: async () => getToken({ template: 'supabase' }),
-      uploadTripId: state.defaultTripId,
+      uploadTripId: tripForBatch.id,
+      saveContext: {
+        tripId: tripForBatch.id,
+        payerMemberId: tripForBatch.owner_member_id,
+        createdByMemberId: tripForBatch.owner_member_id,
+      },
     });
-  }, [isRealBatch, isSignedIn, getToken, state.defaultTripId]);
+  }, [isRealBatch, isSignedIn, getToken, state.defaultTripId, trips]);
 
   // ─── Initialize batch from route params (real picker landing) ──────────
   useEffect(() => {
     const raw = params.imageUris;
     if (!raw) return;
     if (initFromParamsRef.current === raw) return;
-    initFromParamsRef.current = raw;
 
     let uris: unknown;
     try {
       uris = JSON.parse(raw);
     } catch {
+      initFromParamsRef.current = raw;
       return;
     }
-    if (!Array.isArray(uris) || uris.length === 0) return;
+    if (!Array.isArray(uris) || uris.length === 0) {
+      initFromParamsRef.current = raw;
+      return;
+    }
     const sliced = (uris as unknown[])
       .filter((u): u is string => typeof u === 'string')
       .slice(0, MAX_BATCH_IMAGES);
-    if (sliced.length === 0) return;
+    if (sliced.length === 0) {
+      initFromParamsRef.current = raw;
+      return;
+    }
 
-    const tripId = params.tripId ?? DEFAULT_TRIP_ID;
+    const tripId = params.tripId ?? currentTrip?.id ?? '';
+    if (!tripId) return; // Trips still loading. Re-fires when currentTrip resolves.
+
+    initFromParamsRef.current = raw;
     dispatch({
       type: 'INIT_BATCH',
       batchId: `batch-${Date.now()}`,
@@ -188,7 +248,7 @@ export default function QuickCaptureTrayScreen() {
       })),
       createdAt: new Date().toISOString(),
     });
-  }, [params.imageUris, params.tripId]);
+  }, [params.imageUris, params.tripId, currentTrip]);
 
   // ─── Real orchestrator: run uploads when there's pending work ──────────
   useEffect(() => {
@@ -221,6 +281,10 @@ export default function QuickCaptureTrayScreen() {
   // ─── Picker integration ────────────────────────────────────────────────
 
   const handlePickReceipts = useCallback(async () => {
+    if (!currentTrip) {
+      Alert.alert('Create a trip first', 'You need a trip before you can capture receipts.');
+      return;
+    }
     const result = await pickReceiptImages();
     if (result.kind === 'permission_denied') {
       Alert.alert('Photo access needed', 'Allow photo access to scan receipts.');
@@ -238,10 +302,10 @@ export default function QuickCaptureTrayScreen() {
       pathname: '/(tabs)/quick-capture',
       params: {
         imageUris: JSON.stringify(result.images.map((i) => i.uri)),
-        tripId: DEFAULT_TRIP_ID,
+        tripId: currentTrip.id,
       },
     });
-  }, [router]);
+  }, [router, currentTrip]);
 
   // ─── Demo-batch initializer (visual review only) ───────────────────────
   const seedDemoBatch = useCallback(() => {
@@ -250,14 +314,14 @@ export default function QuickCaptureTrayScreen() {
     dispatch({
       type: 'INIT_BATCH',
       batchId: `batch-${Date.now()}`,
-      defaultTripId: DEFAULT_TRIP_ID,
+      defaultTripId: currentTrip?.id ?? DEMO_PLACEHOLDER_TRIP.id,
       images: Array.from({ length: 6 }, (_, i) => ({
         id: id(i),
         imageUri: `${DEMO_URI_PREFIX}/200x260/F4F9FF/16233B?text=Receipt`,
       })),
       createdAt: now,
     });
-  }, []);
+  }, [currentTrip]);
 
   // Demo-only simulator — drives a fake orchestration so the placeholder
   // batch progresses through states for visual review. Gated on the
@@ -497,16 +561,75 @@ export default function QuickCaptureTrayScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={{ title: 'Quick capture', headerShown: true }} />
         <ScrollView contentContainerStyle={styles.empty}>
-          <EmptyState
-            illustration={<Text variant="displayXl">🧾</Text>}
-            title="Nothing in the inbox yet"
-            description="Pick up to 8 receipts to start a quick capture."
-            cta={{ label: 'Pick receipts', onPress: handlePickReceipts }}
-          />
-          <View style={styles.emptySecondary}>
-            <Button label="Start demo batch" variant="ghost" size="sm" onPress={seedDemoBatch} />
-          </View>
+          {tripsState.kind === 'loading' ? (
+            <View style={styles.loadingTrips}>
+              <Skeleton width="100%" height={28} />
+              <Skeleton width="80%" height={16} />
+              <Skeleton width="60%" height={16} />
+            </View>
+          ) : tripsState.kind === 'error' ? (
+            <>
+              <Banner
+                variant="error"
+                title="Couldn't load trips"
+                description={tripsState.message}
+              />
+              <View style={styles.emptySecondary}>
+                <Button label="Retry" variant="primary" size="md" onPress={refetchTrips} />
+              </View>
+            </>
+          ) : trips.length === 0 ? (
+            <EmptyState
+              illustration={<Text variant="displayXl">✈️</Text>}
+              title="Create a trip first"
+              description="Receipts live inside trips. Make one and you're set."
+              cta={{
+                label: 'Create a trip',
+                onPress: () => createTripSheetRef.current?.present(),
+              }}
+            />
+          ) : (
+            <EmptyState
+              illustration={<Text variant="displayXl">🧾</Text>}
+              title="Nothing in the inbox yet"
+              description={`Pick up to 8 receipts to start a quick capture for ${currentTrip?.name ?? ''}.`}
+              cta={{ label: 'Pick receipts', onPress: handlePickReceipts }}
+            />
+          )}
+          {tripsState.kind === 'ready' ? (
+            <View style={styles.emptySecondary}>
+              <Button label="Start demo batch" variant="ghost" size="sm" onPress={seedDemoBatch} />
+            </View>
+          ) : null}
         </ScrollView>
+        <CreateTripSheet
+          sheetRef={createTripSheetRef}
+          form={createTripForm}
+          onChange={setCreateTripForm}
+          submitting={creatingTrip}
+          onSubmit={async () => {
+            const name = createTripForm.name.trim();
+            const currency = createTripForm.currency.trim().toUpperCase();
+            if (!name || !/^[A-Z]{3}$/.test(currency)) return;
+            setCreatingTrip(true);
+            try {
+              await createTrip(async () => getToken({ template: 'supabase' }), {
+                name,
+                home_currency: currency,
+              });
+              createTripSheetRef.current?.dismiss();
+              setCreateTripForm({ name: '', currency: 'SGD' });
+              await refetchTrips();
+            } catch (e) {
+              Alert.alert(
+                'Could not create trip',
+                e instanceof Error ? e.message : 'Unknown error',
+              );
+            } finally {
+              setCreatingTrip(false);
+            }
+          }}
+        />
       </View>
     );
   }
@@ -606,10 +729,11 @@ export default function QuickCaptureTrayScreen() {
         <TripPickerSheet
           ref={tripPickerRef}
           scope={tripPicker.kind === 'batch' ? 'batch' : 'single_card'}
-          trips={MOCK_TRIPS}
+          trips={tripPickerTrips}
           initialTripId={
             tripPicker.kind === 'single_card'
-              ? (state.drafts.find((d) => d.id === tripPicker.draftId)?.tripId ?? DEFAULT_TRIP_ID)
+              ? (state.drafts.find((d) => d.id === tripPicker.draftId)?.tripId ??
+                state.defaultTripId)
               : state.defaultTripId
           }
           currentTripMode={state.tripMode}
@@ -772,6 +896,79 @@ function countByTrip(drafts: DraftExpense[]): Record<string, number> {
   }, {});
 }
 
+// ─── Create-trip sheet ───────────────────────────────────────────────────
+
+const CURRENCY_OPTIONS = ['SGD', 'USD', 'EUR', 'JPY', 'MYR', 'GBP'];
+
+function CreateTripSheet({
+  sheetRef,
+  form,
+  onChange,
+  submitting,
+  onSubmit,
+}: {
+  sheetRef: React.RefObject<BottomSheetHandle | null>;
+  form: { name: string; currency: string };
+  onChange: (next: { name: string; currency: string }) => void;
+  submitting: boolean;
+  onSubmit: () => void;
+}) {
+  const trimmedName = form.name.trim();
+  const validCurrency = /^[A-Z]{3}$/.test(form.currency.trim().toUpperCase());
+  const canSubmit = trimmedName.length > 0 && validCurrency && !submitting;
+
+  return (
+    <BottomSheet ref={sheetRef} title="New trip" snapPoints={['55%']}>
+      <View style={createTripStyles.body}>
+        <TextInput
+          label="Name"
+          placeholder="Bali Apr 2026"
+          value={form.name}
+          onChangeText={(name) => onChange({ ...form, name })}
+          autoFocus
+          editable={!submitting}
+        />
+        <View style={createTripStyles.currencyRow}>
+          <Text variant="subtitle">Home currency</Text>
+          <View style={createTripStyles.currencyChips}>
+            {CURRENCY_OPTIONS.map((c) => (
+              <Chip
+                key={c}
+                label={c}
+                selected={form.currency === c}
+                onPress={() => onChange({ ...form, currency: c })}
+              />
+            ))}
+          </View>
+        </View>
+        <Button
+          label={submitting ? 'Creating…' : 'Create trip'}
+          variant="primary"
+          size="md"
+          fullWidth
+          disabled={!canSubmit}
+          onPress={onSubmit}
+        />
+      </View>
+    </BottomSheet>
+  );
+}
+
+const createTripStyles = StyleSheet.create({
+  body: {
+    gap: Space[16],
+    paddingTop: Space[8],
+  },
+  currencyRow: {
+    gap: Space[8],
+  },
+  currencyChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space[8],
+  },
+});
+
 // ─── Styles ──────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -805,6 +1002,10 @@ const styles = StyleSheet.create({
     padding: Space[16],
     paddingBottom: Rhythm.bottomContentPaddingWithStickyBar,
     gap: Space[12],
+  },
+  loadingTrips: {
+    gap: Space[12],
+    paddingTop: Space[24],
   },
   empty: {
     flex: 1,
