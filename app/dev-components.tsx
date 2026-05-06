@@ -2,15 +2,18 @@
 // production navigation. Open at /dev-components in the dev server.
 
 import { Stack } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   Banner,
+  BottomSheet,
+  type BottomSheetHandle,
   Button,
   Card,
   CategoryIcon,
   Chip,
+  CurrencyInput,
   EmptyState,
   ListRow,
   ReceiptThumbnail,
@@ -34,6 +37,10 @@ export default function DevComponentsScreen() {
   const [merchantError, setMerchantError] = useState('');
   const [taxMode, setTaxMode] = useState<'inclusive' | 'exclusive'>('exclusive');
   const [currency, setCurrency] = useState<(typeof CURRENCIES)[number]>('SGD');
+  const [amountMinor, setAmountMinor] = useState<bigint | null>(2038n);
+  const [tipMinor, setTipMinor] = useState<bigint | null>(null);
+  const sheetRef = useRef<BottomSheetHandle>(null);
+  const dynamicSheetRef = useRef<BottomSheetHandle>(null);
 
   return (
     <>
@@ -315,6 +322,54 @@ export default function DevComponentsScreen() {
           </View>
         </Section>
 
+        <Section title="CurrencyInput">
+          <CurrencyInput
+            label="Total"
+            value={amountMinor}
+            onChangeMinor={setAmountMinor}
+            currency={currency}
+            helper={`Stored: ${amountMinor === null ? 'null' : amountMinor.toString() + ' minor units'}`}
+          />
+          <CurrencyInput
+            label="Tip (optional)"
+            value={tipMinor}
+            onChangeMinor={setTipMinor}
+            currency={currency}
+            helper="Empty by default — leave blank when no tip."
+          />
+          <CurrencyInput
+            label="With error"
+            value={null}
+            onChangeMinor={() => {}}
+            currency={currency}
+            error="Total is required."
+          />
+          <CurrencyInput
+            label="Disabled"
+            value={9999n}
+            onChangeMinor={() => {}}
+            currency={currency}
+            editable={false}
+          />
+          <Text variant="caption" color="textSecondary">
+            Switch the chip above (SGD/USD/EUR/MYR/JPY) to see decimals re-format.
+          </Text>
+        </Section>
+
+        <Section title="BottomSheet">
+          <View style={styles.row}>
+            <Button label="Open half-sheet" onPress={() => sheetRef.current?.present()} />
+            <Button
+              label="Open dynamic-sized"
+              variant="secondary"
+              onPress={() => dynamicSheetRef.current?.present()}
+            />
+          </View>
+          <Text variant="caption" color="textSecondary">
+            Drag the handle down to dismiss, or tap the backdrop.
+          </Text>
+        </Section>
+
         <Section title="EmptyState">
           <View style={styles.emptyWrap}>
             <EmptyState
@@ -326,6 +381,30 @@ export default function DevComponentsScreen() {
           </View>
         </Section>
       </ScrollView>
+
+      <BottomSheet ref={sheetRef} title="New trip" snapPoints={['50%']}>
+        <Text variant="body" color="textSecondary">
+          This is a half-sheet. In C3 it&apos;ll host the trip-create form.
+        </Text>
+        <View style={styles.row}>
+          {CURRENCIES.map((c) => (
+            <Chip key={c} label={c} selected={currency === c} onPress={() => setCurrency(c)} />
+          ))}
+        </View>
+        <Button
+          label="Close"
+          variant="secondary"
+          fullWidth
+          onPress={() => sheetRef.current?.dismiss()}
+        />
+      </BottomSheet>
+
+      <BottomSheet ref={dynamicSheetRef} title="Compact sheet" enableDynamicSizing>
+        <Text variant="body" color="textSecondary">
+          Dynamic sizing — sheet hugs its content height.
+        </Text>
+        <Button label="Got it" fullWidth onPress={() => dynamicSheetRef.current?.dismiss()} />
+      </BottomSheet>
     </>
   );
 }

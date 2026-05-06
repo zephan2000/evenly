@@ -1,5 +1,7 @@
 export { Banner } from './banner';
 export type { BannerProps, BannerVariant } from './banner';
+export { BottomSheet } from './bottom-sheet';
+export type { BottomSheetHandle, BottomSheetProps } from './bottom-sheet';
 export { Button } from './button';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './button';
 export { Card } from './card';
@@ -8,6 +10,8 @@ export { CategoryIcon } from './category-icon';
 export type { CategoryIconProps } from './category-icon';
 export { Chip } from './chip';
 export type { ChipProps } from './chip';
+export { CurrencyInput } from './currency-input';
+export type { CurrencyInputProps } from './currency-input';
 export { EmptyState } from './empty-state';
 export type { EmptyStateProps } from './empty-state';
 export { ListRow } from './list-row';

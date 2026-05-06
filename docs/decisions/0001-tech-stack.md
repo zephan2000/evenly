@@ -28,3 +28,21 @@ Evenly is a mobile-first expense-tracking app with web parity. Solo builder, pre
 - Two auth systems (Clerk + Supabase RLS) require careful JWT setup. See `docs/setup.md`.
 - Some Expo features (e.g., haptics, native modules) won't work on web — guard with `Platform.OS`.
 - `EXPO_PUBLIC_*` env vars are inlined at build time, not runtime. Server keys must NOT use the `EXPO_PUBLIC_` prefix.
+
+## Addenda
+
+### 2026-05-06 — `@gorhom/bottom-sheet` adopted for half-sheets
+
+Half-sheet modals (M1: trip-create; post-MVP: currency picker, category picker, share-sheet, member picker) ship via `@gorhom/bottom-sheet@^5`. Peer deps `react-native-reanimated` and `react-native-gesture-handler` were already in the lockfile.
+
+**Why not roll our own:** gesture arbitration (sheet drag vs. content scroll), keyboard avoidance, a11y modal semantics, and snap-point velocity physics are non-trivial cross-platform problems. We'd own the bug tail forever for a single sheet's worth of saved work; at 4+ sheets it never breaks even.
+
+**Wrapper invariants** (`components/ui/bottom-sheet.tsx`):
+
+- Content goes inside `BottomSheetView` (Gorhom requires this for `enableDynamicSizing` and for stable layout measurement on web).
+- For text inputs nested inside a sheet, use `BottomSheetTextInput` directly from `@gorhom/bottom-sheet` — do not nest our own `<TextInput>`, it causes keyboard glitches.
+- Root must wrap children in `<GestureHandlerRootView><BottomSheetModalProvider>` (done in `app/_layout.tsx`).
+
+A benign React 19 dev warning ("Accessing element.ref was removed…") emits from Gorhom internals; tracked upstream, not actionable here.
+
+`playwright` was added as a devDep at the same time so `scripts/screenshot-2d.mjs` and future per-chunk self-verify scripts are reproducible without depending on the user-scoped MCP plugin.
