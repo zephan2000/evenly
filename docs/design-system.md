@@ -2,7 +2,7 @@
 
 Concrete proposal for how Evenly looks and feels. Companion to [ux-principles.md](./ux-principles.md): that doc is the rubric (must-haves, forbidden patterns); this one is the visual + interaction system. When something here proves wrong in practice, update it.
 
-Status: **accepted for milestone 1 (scan + key + save)**, 2026-05-05. Codex review at [codex-reviews/2026-05-05-design-system.md](./codex-reviews/2026-05-05-design-system.md); 14/14 findings reconciled.
+Status: **accepted for milestone 1 (scan + key + save)**, revised 2026-05-06 for the editorial pastoral refresh. Codex review at [codex-reviews/2026-05-05-design-system.md](./codex-reviews/2026-05-05-design-system.md); implementation should follow the updated direction below.
 
 ## 1. Tone
 
@@ -11,9 +11,10 @@ Friends splitting bills on trips. Money is involved, mistakes hurt friendships. 
 - **Trustworthy** — show what was inferred; don't hide it
 - **Effortless** — AI does the boring part; the user glides through edits
 - **Warm** — friends on vacation, not corporate accounting
+- **Editorial** — feels art-directed, poster-like, and typographically intentional
 - **Native** — feels like a phone app, not a web page on a phone
 
-Position: **Tricount's warmth, Linear's precision, Stripe's color discipline, Apple's depth.**
+Position: **Tricount's warmth, editorial poster typography, Apple's restraint, and a quiet travel-photo calm.**
 
 ## 2. The Stripe register split
 
@@ -30,17 +31,17 @@ This discipline prevents YouTrip-loud. Bulk UI stays calm.
 
 ### 3.1 Brand — split into accent + interactive
 
-Two tokens, tonally adjacent, used in different contexts. The accent stays soft because the user-chosen hue feels right; the interactive variant is a single shade darker so text-on-button hits WCAG AA.
+Two tokens, tonally adjacent, used in different contexts. The accent stays soft and atmospheric; the interactive variant is a deeper blue so text-on-button hits WCAG AA without pushing the product into a loud tech palette.
 
-| Token                       | Hex       | Use                                                                               |
-| --------------------------- | --------- | --------------------------------------------------------------------------------- |
-| `brand-accent`              | `#A171F5` | wordmark, hero gradient anchor, focus glow, decorative fills (no text on top)     |
-| `brand-interactive`         | `#7C3AED` | primary buttons, links, active segmented option, anywhere text sits on the violet |
-| `brand-interactive-pressed` | `#6D28D9` | press / active state                                                              |
-| `brand-focus-ring`          | `#C4B5FD` | 2px ring on focused interactive elements                                          |
-| `brand-wash-bg`             | `#F4EEFE` | very pale tint behind hero amounts                                                |
+| Token                       | Hex       | Use                                                                             |
+| --------------------------- | --------- | ------------------------------------------------------------------------------- |
+| `brand-accent`              | `#8FC2FF` | wordmark, hero gradient anchor, focus glow, decorative fills (no text on top)   |
+| `brand-interactive`         | `#2457D6` | primary buttons, links, active segmented option, anywhere text sits on the blue |
+| `brand-interactive-pressed` | `#1C45AD` | press / active state                                                            |
+| `brand-focus-ring`          | `#B9D3FF` | 2px ring on focused interactive elements                                        |
+| `brand-wash-bg`             | `#EEF5FF` | very pale tint behind hero amounts                                              |
 
-White text only on `#7C3AED` or darker. Never on `#A171F5`.
+White text only on `#2457D6` or darker. Never on `#8FC2FF`.
 
 ### 3.2 Category palette — two-step, dark glyphs
 
@@ -63,13 +64,13 @@ Every category has an **icon** (saturated, used as small accent dot) and a **tin
 
 | Role                   | Hex                                  |
 | ---------------------- | ------------------------------------ |
-| Canvas                 | `#FBFAFC`                            |
+| Canvas                 | `#FAFBF8`                            |
 | Surface                | `#FFFFFF`                            |
 | Surface raised (glass) | `rgba(255,255,255,0.72)` over canvas |
-| Border subtle          | `#E9E7EE`                            |
-| Text primary           | `#1A1625`                            |
-| Text secondary         | `#6B6679`                            |
-| Text disabled          | `#A8A4B3`                            |
+| Border subtle          | `#E5E9EE`                            |
+| Text primary           | `#16233B`                            |
+| Text secondary         | `#667085`                            |
+| Text disabled          | `#98A2B3`                            |
 
 ### 3.4 Semantic — separate from categories
 
@@ -86,9 +87,10 @@ System status carries its own palette so banners, toasts, and chips can never be
 
 To prevent drift, the "rich" register is a single recipe. Reused everywhere a hero surface appears (home top card, saved-detail header).
 
-- **Page wash**: `linear-gradient(180deg, #FCF8FF 0%, #F4EEFE 58%, #FFFFFF 100%)`
-- **Accent glow behind hero amount**: `rgba(122, 90, 248, 0.14)` — single radial glow, no mesh, no second hue
-- **No pink in milestone 1**
+- **Page wash**: `linear-gradient(180deg, #F4F9FF 0%, #EEF5FF 54%, #FFFDF7 100%)`
+- **Accent glow behind hero amount**: `rgba(143, 194, 255, 0.22)` — single radial glow, no mesh, no second hue
+- **Photography direction**: soft sky, clouds, open field, water, or quiet landscape imagery behind or adjacent to the hero; images stay calm and low-noise
+- **No neon, no purple drift, no synthetic mesh gradients in milestone 1**
 
 Saved-detail header reuses the same wash. No second treatment.
 
@@ -98,24 +100,37 @@ Tracked, not built. The same palette will rotate to a darker neutral set; brand 
 
 ## 4. Typography
 
-**Primary: Geist** (sans). **Numerals at hero scale: Geist Mono.** Loaded via `expo-font` in `app/_layout.tsx` from `assets/fonts/`.
+**Primary UI sans: Open Sauce One.** **Public alternate sans: Plus Jakarta Sans.** **Public display accents: Fraunces or Peace Sans, depending surface.** Loaded via `expo-font` in `app/_layout.tsx` from `assets/fonts/`.
+
+System rule: the product is still a utility app, so expressive display fonts are used selectively. Dense form surfaces, tables, list rows, and settings remain in the UI sans. Display fonts appear only where they add memory and warmth without hurting scan speed.
+
+### 4.0 Font pairing policy
+
+- **Default pairing**: Open Sauce One + Fraunces
+- **Alternate pairing**: Open Sauce One + Peace Sans
+- **If Open Sauce is unavailable**: Plus Jakarta Sans may substitute for the sans role
+- **Fraunces** is the public substitute for the original Cooper-like direction: warm, editorial, soft, and premium
+- **Peace Sans** is for bolder, geometric hero treatments where Cooper feels too soft
+- `Cooper BT` and `Proxima Nova` are reference inspirations only, not implementation dependencies
+- Never mix Fraunces and Peace Sans on the same screen
+- No monospace numerals as a signature move; the new direction is warmer and less technical
 
 ### 4.1 Type scale
 
 Hard rule: **no text token below 12pt**. Line-heights specified for every token (matches ux-principles §accessibility floor).
 
-| Token       | Size / line-height | Weight | Family     | Use                                                     |
-| ----------- | ------------------ | ------ | ---------- | ------------------------------------------------------- |
-| display-xl  | 40 / 44            | 700    | Geist Mono | hero amounts only (home trip total, saved-detail total) |
-| display     | 28 / 34            | 700    | Geist      | screen titles                                           |
-| title       | 22 / 28            | 600    | Geist      | section titles                                          |
-| subtitle    | 17 / 24            | 600    | Geist      | row titles, labels                                      |
-| body        | 15 / 22            | 400    | Geist      | default body                                            |
-| body-strong | 15 / 22            | 500    | Geist      | inline emphasis, inline money amounts                   |
-| caption     | 13 / 18            | 400    | Geist      | metadata, timestamps                                    |
-| chip        | 12 / 16            | 600    | Geist      | chip labels, tags                                       |
+| Token       | Size / line-height | Weight | Family                 | Use                                   |
+| ----------- | ------------------ | ------ | ---------------------- | ------------------------------------- |
+| display-xl  | 40 / 44            | 700    | Fraunces or Peace Sans | hero headlines only; use sparingly    |
+| display     | 28 / 34            | 700    | Open Sauce One         | screen titles                         |
+| title       | 22 / 28            | 600    | Open Sauce One         | section titles                        |
+| subtitle    | 17 / 24            | 600    | Open Sauce One         | row titles, labels                    |
+| body        | 15 / 22            | 400    | Open Sauce One         | default body                          |
+| body-strong | 15 / 22            | 600    | Open Sauce One         | inline emphasis, inline money amounts |
+| caption     | 13 / 18            | 400    | Open Sauce One         | metadata, timestamps, utility copy    |
+| chip        | 12 / 16            | 600    | Open Sauce One         | chip labels, tags                     |
 
-Inline money amounts use `body-strong` (Geist Sans 15/500) with `font-variant-numeric: tabular-nums` so columns align without going Mono. Mono is reserved for display-xl hero totals only — anywhere else, sans + tabular-nums.
+Inline money amounts use `body-strong` with `font-variant-numeric: tabular-nums` so columns align without looking technical. Hero totals also remain sans unless a specific marketing surface calls for stronger display treatment.
 
 ### 4.2 Dynamic Type
 
@@ -133,7 +148,7 @@ On native, focus rings come from the platform (no override).
 
 ### 4.4 Wordmark
 
-"Evenly" set in **Geist 700** at display weight, **−2% letter-spacing** (slightly tightened). No designed mark for milestone 1.
+"Evenly" set in **Fraunces** for the hero register and **Open Sauce One 700** for utility contexts. No standalone mark for milestone 1. The wordmark should feel soft, recognizable, and slightly nostalgic rather than geometric-tech.
 
 ## 5. Spacing, radii, elevation, component rhythm
 
@@ -184,9 +199,10 @@ Restraint won the Codex argument. M1 ships glass at exactly two places:
 
 ### 6.1 Hero amount block
 
-- Big Geist Mono numeral (display-xl) over the locked hero wash from §3.5
+- Large typographic focal point over the locked hero wash from §3.5
 - `shadow-glass` for the accent glow
 - Found on home current-trip total and saved-detail total
+- May include soft pastoral photography, but type must remain the primary read
 
 ### 6.2 Sticky save bar (edit screen)
 
@@ -222,6 +238,14 @@ Built once via the `frontend-design` skill in C1, reused thereafter. Located in 
 | `EmptyState`       | illustrated zero-data screen (placeholder illustrations for milestone 1).                                                                  |
 | `CategoryIcon`     | 40pt rounded-12 square, flat fill = category tint, dark glyph in matching dark variant (§3.2). No gradient, no inner highlight, no shadow. |
 | `ReceiptThumbnail` | 56×56 tile, radius 10, border 1px `#E9E7EE`, optional caption below in caption/13/400. Tap to open full preview.                           |
+
+## 7.1 Art direction guardrails
+
+- Home and sign-in may use landscape photography, but working screens should stay mostly image-free
+- Photography should feel real, quiet, and breathable; avoid busy city scenes, nightlife, neon, or stock-office imagery
+- Layouts should read like an editorial poster translated into app UI: one focal headline, small utility metadata, generous whitespace
+- Avoid glossy SaaS tropes: glass everywhere, oversized gradients, purple-on-white defaults, floating decorative blobs
+- The design should feel cultured and calm, not playful-cute and not enterprise-serious
 
 ## 8. Screen-by-screen — with state matrix
 
