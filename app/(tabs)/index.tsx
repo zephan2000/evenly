@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -39,6 +40,7 @@ const expenseRows = [
 ] as const;
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { headlineMood } = useMockFontSet();
   const decorativeHeadingStyle = decorativeHeadingStyles[headlineMood];
 
@@ -63,7 +65,11 @@ export default function HomeScreen() {
                 $842.40
               </Text>
             </View>
-            <Button label="Add expense" size="lg" />
+            <Button
+              label="Add expense"
+              size="lg"
+              onPress={() => router.push('/(tabs)/quick-capture')}
+            />
           </View>
         }
       />
