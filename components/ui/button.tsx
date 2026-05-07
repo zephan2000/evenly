@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { Brand, Neutral, Radius } from '@/constants/theme';
+import { Brand, Neutral, Radius, WebFocusRing } from '@/constants/theme';
 import { Text, type TextColorToken, type TextVariant } from './text';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
@@ -116,8 +116,8 @@ function textColorFor(variant: ButtonVariant): TextColorToken {
 // shape but react-native-web forwards them straight to the DOM node, so we
 // declare via an `as` boundary to keep TS happy.
 const webFocusStyle = {
-  outline: '2px solid #7C3AED',
-  outlineOffset: 2,
+  outline: WebFocusRing.outline,
+  outlineOffset: WebFocusRing.outlineOffset,
 } as unknown as StyleProp<ViewStyle>;
 
 const styles = StyleSheet.create({

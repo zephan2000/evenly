@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { Brand, Neutral } from '@/constants/theme';
+import { Brand, Neutral, WebFocusRing } from '@/constants/theme';
 import { Text } from './text';
 
 export type SegmentedOption<T extends string> = {
@@ -64,8 +64,8 @@ export function SegmentedControl<T extends string>({
 }
 
 const webFocusStyle = {
-  outline: '2px solid #7C3AED',
-  outlineOffset: 2,
+  outline: WebFocusRing.outline,
+  outlineOffset: WebFocusRing.outlineOffset,
 } as unknown as StyleProp<ViewStyle>;
 
 const styles = StyleSheet.create({

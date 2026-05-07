@@ -6,11 +6,11 @@ import { Platform } from 'react-native';
 // ─── Color ───────────────────────────────────────────────────────────────
 
 export const Brand = {
-  accent: '#A171F5',
-  interactive: '#7C3AED',
-  interactivePressed: '#6D28D9',
-  focusRing: '#C4B5FD',
-  washBg: '#F4EEFE',
+  accent: '#8FC2FF',
+  interactive: '#2457D6',
+  interactivePressed: '#1C45AD',
+  focusRing: '#B9D3FF',
+  washBg: '#EEF5FF',
 } as const;
 
 // Category palette: every category has icon (saturated, used as accent dot),
@@ -28,13 +28,13 @@ export const Category = {
 export type CategoryKey = keyof typeof Category;
 
 export const Neutral = {
-  canvas: '#FBFAFC',
+  canvas: '#FAFBF8',
   surface: '#FFFFFF',
   surfaceRaised: 'rgba(255,255,255,0.72)',
-  borderSubtle: '#E9E7EE',
-  textPrimary: '#1A1625',
-  textSecondary: '#6B6679',
-  textDisabled: '#A8A4B3',
+  borderSubtle: '#E5E9EE',
+  textPrimary: '#16233B',
+  textSecondary: '#667085',
+  textDisabled: '#98A2B3',
 } as const;
 
 // Semantic palette is intentionally separate from Category so banners / toasts
@@ -49,15 +49,16 @@ export const Semantic = {
 // Hero register — single locked formula per design-system §3.5. Reused on
 // every hero surface (home top card, saved-detail header). No improvisation.
 export const Hero = {
-  pageWashGradient: ['#FCF8FF', '#F4EEFE', '#FFFFFF'] as const,
-  pageWashStops: [0, 0.58, 1] as const,
-  accentGlow: 'rgba(122, 90, 248, 0.14)',
+  pageWashGradient: ['#F4F9FF', '#EEF5FF', '#FFFDF7'] as const,
+  pageWashStops: [0, 0.54, 1] as const,
+  accentGlow: 'rgba(143, 194, 255, 0.22)',
 } as const;
 
 // ─── Typography ──────────────────────────────────────────────────────────
 
 // Font family names match the keys we register with expo-font in _layout.tsx.
-// Per design-system §4: no token below 12pt; Mono only at display-xl.
+// The current app still ships the existing local font packages; these act as
+// stand-ins while we validate the layout and art direction of the mockups.
 export const FontFamily = {
   sansRegular: 'Geist_400Regular',
   sansMedium: 'Geist_500Medium',
@@ -68,10 +69,10 @@ export const FontFamily = {
 
 export const Type = {
   displayXl: {
-    fontFamily: FontFamily.monoBold,
+    fontFamily: FontFamily.sansBold,
     fontSize: 40,
     lineHeight: 44,
-    letterSpacing: -0.5,
+    letterSpacing: -1.2,
   },
   display: {
     fontFamily: FontFamily.sansBold,
@@ -184,8 +185,8 @@ export const Shadow = {
   }),
   glass: Platform.select({
     ios: {
-      shadowColor: '#7A5AF8',
-      shadowOpacity: 0.14,
+      shadowColor: '#8FC2FF',
+      shadowOpacity: 0.22,
       shadowOffset: { width: 0, height: 8 },
       shadowRadius: 24,
     },

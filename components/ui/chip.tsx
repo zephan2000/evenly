@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { Brand, Neutral, Radius, Rhythm } from '@/constants/theme';
+import { Brand, Neutral, Radius, Rhythm, WebFocusRing } from '@/constants/theme';
 import { Text } from './text';
 
 export type ChipProps = {
@@ -84,8 +84,8 @@ function selectedStyle(selected: boolean): StyleProp<ViewStyle> {
 }
 
 const webFocusStyle = {
-  outline: '2px solid #7C3AED',
-  outlineOffset: 2,
+  outline: WebFocusRing.outline,
+  outlineOffset: WebFocusRing.outlineOffset,
 } as unknown as StyleProp<ViewStyle>;
 
 const styles = StyleSheet.create({

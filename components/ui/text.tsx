@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text as RNText, type TextProps as RNTextProps, type TextStyle } from 'react-native';
 
+import { useMockFontSet } from '@/components/mockup-font-provider';
 import { Brand, Neutral, Semantic, Type } from '@/constants/theme';
 
 export type TextVariant = keyof typeof Type;
@@ -45,8 +46,10 @@ export function Text({
   maxFontSizeMultiplier,
   ...rest
 }: TextProps) {
+  useMockFontSet();
+  const typeStyle = geistStyleFor(Type[variant], variant);
   const composed: TextStyle = {
-    ...Type[variant],
+    ...typeStyle,
     color: colorTokens[color],
     ...(tabularNums ? { fontVariant: ['tabular-nums'] } : null),
   };
@@ -59,4 +62,35 @@ export function Text({
       style={[composed, style]}
     />
   );
+}
+
+function geistStyleFor(base: TextStyle, variant: TextVariant): TextStyle {
+  switch (variant) {
+    case 'displayXl':
+    case 'display':
+      return {
+        ...base,
+        fontFamily: 'Geist_700Bold',
+      };
+    case 'title':
+    case 'subtitle':
+    case 'chip':
+      return {
+        ...base,
+        fontFamily: 'Geist_600SemiBold',
+      };
+    case 'bodyStrong':
+    case 'amountInline':
+      return {
+        ...base,
+        fontFamily: 'Geist_500Medium',
+      };
+    case 'caption':
+    case 'body':
+    default:
+      return {
+        ...base,
+        fontFamily: 'Geist_400Regular',
+      };
+  }
 }

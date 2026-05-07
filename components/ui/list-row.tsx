@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { Neutral, Rhythm } from '@/constants/theme';
+import { Neutral, Rhythm, WebFocusRing } from '@/constants/theme';
 import { Text } from './text';
 
 export type ListRowProps = {
@@ -77,8 +77,8 @@ export function ListRow({
 }
 
 const webFocusStyle = {
-  outline: '2px solid #7C3AED',
-  outlineOffset: 2,
+  outline: WebFocusRing.outline,
+  outlineOffset: WebFocusRing.outlineOffset,
 } as unknown as StyleProp<ViewStyle>;
 
 const styles = StyleSheet.create({
