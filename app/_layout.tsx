@@ -72,8 +72,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <BottomSheetModalProvider>
-          <MockFontSetProvider>
+        <MockFontSetProvider>
+          <BottomSheetModalProvider>
             <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
               <Stack>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -82,8 +82,8 @@ export default function RootLayout() {
               </Stack>
               <StatusBar style="auto" />
             </ThemeProvider>
-          </MockFontSetProvider>
-        </BottomSheetModalProvider>
+          </BottomSheetModalProvider>
+        </MockFontSetProvider>
       </ClerkProvider>
     </GestureHandlerRootView>
   );
