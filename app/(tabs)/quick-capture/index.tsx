@@ -173,12 +173,23 @@ export default function QuickCaptureTrayScreen() {
     }
   }, [getToken]);
 
-  // Fetch trips on mount once Clerk reports a signed-in session.
+  // Fetch trips once per signed-in session. Use a ref guard rather than
+  // tripsState.kind because refetchTrips synchronously sets state to a NEW
+  // {kind:'loading'} object — same kind value but a new reference. If the
+  // effect re-runs (e.g. because Clerk's getToken makes refetchTrips
+  // unstable), a tripsState.kind === 'loading' guard fails to bail out and
+  // fires another refetchTrips, kicking off concurrent /api/trips requests
+  // until the first one resolves.
+  const initialFetchRef = useRef(false);
   useEffect(() => {
-    if (!isSignedIn) return;
-    if (tripsState.kind !== 'loading') return;
+    if (!isSignedIn) {
+      initialFetchRef.current = false;
+      return;
+    }
+    if (initialFetchRef.current) return;
+    initialFetchRef.current = true;
     void refetchTrips();
-  }, [isSignedIn, tripsState.kind, refetchTrips]);
+  }, [isSignedIn, refetchTrips]);
 
   const visibleDrafts = useMemo(
     () => state.drafts.filter((d) => d.status !== 'discarded'),
