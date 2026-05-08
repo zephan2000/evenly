@@ -158,7 +158,7 @@ export default function QuickCaptureTrayScreen() {
   const refetchTrips = useCallback(async () => {
     setTripsState({ kind: 'loading' });
     try {
-      const list = await listTrips(async () => getToken({ template: 'supabase' }));
+      const list = await listTrips(async () => getToken());
       setTripsState({ kind: 'ready', trips: list });
     } catch (e) {
       setTripsState({
@@ -199,7 +199,7 @@ export default function QuickCaptureTrayScreen() {
     const tripForBatch = trips.find((t) => t.id === state.defaultTripId);
     if (!tripForBatch) return null;
     return createRealDeps({
-      getToken: async () => getToken({ template: 'supabase' }),
+      getToken: async () => getToken(),
       uploadTripId: tripForBatch.id,
       saveContext: {
         tripId: tripForBatch.id,
@@ -613,7 +613,7 @@ export default function QuickCaptureTrayScreen() {
             if (!name || !/^[A-Z]{3}$/.test(currency)) return;
             setCreatingTrip(true);
             try {
-              await createTrip(async () => getToken({ template: 'supabase' }), {
+              await createTrip(async () => getToken(), {
                 name,
                 home_currency: currency,
               });
