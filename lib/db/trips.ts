@@ -34,7 +34,7 @@ export async function listTrips(getToken: GetToken, apiBase = ''): Promise<TripR
     const msg = json && 'error' in json ? json.error : `HTTP ${res.status}`;
     throw new Error(`list_trips_failed: ${msg}`);
   }
-  return json.trips;
+  return Array.isArray(json.trips) ? json.trips : [];
 }
 
 export async function createTrip(

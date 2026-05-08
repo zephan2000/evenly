@@ -137,7 +137,7 @@ export default function QuickCaptureTrayScreen() {
   const extractInFlightRef = useRef(false);
 
   const trips = useMemo<TripRecord[]>(
-    () => (tripsState.kind === 'ready' ? tripsState.trips : []),
+    () => (tripsState.kind === 'ready' && Array.isArray(tripsState.trips) ? tripsState.trips : []),
     [tripsState],
   );
   const currentTrip = trips[0] ?? null;
