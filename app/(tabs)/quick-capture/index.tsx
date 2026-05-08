@@ -111,6 +111,11 @@ export default function QuickCaptureTrayScreen() {
   const params = useLocalSearchParams<{ imageUris?: string; tripId?: string }>();
   const { getToken, isSignedIn } = useAuth();
 
+  // Memoized so Stack.Screen receives a stable options reference and doesn't
+  // call setOptions on every render — that pattern produces an infinite
+  // commit-phase loop (React error #185) once the parent re-renders often.
+  const stackScreenOptions = useMemo(() => ({ title: 'Quick capture', headerShown: true }), []);
+
   const [state, dispatch] = useReducer(reducer, undefined, emptyBatch);
   const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
   const [tripPicker, setTripPicker] = useState<TripPickerState>({ kind: 'closed' });
@@ -559,7 +564,7 @@ export default function QuickCaptureTrayScreen() {
   if (visibleDrafts.length === 0) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Quick capture', headerShown: true }} />
+        <Stack.Screen options={stackScreenOptions} />
         <ScrollView contentContainerStyle={styles.empty}>
           {tripsState.kind === 'loading' ? (
             <View style={styles.loadingTrips}>
@@ -636,7 +641,7 @@ export default function QuickCaptureTrayScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Quick capture', headerShown: true }} />
+      <Stack.Screen options={stackScreenOptions} />
 
       {/* Header — trip chip + discard-all */}
       <View style={styles.header}>

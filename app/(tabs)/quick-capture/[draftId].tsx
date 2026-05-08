@@ -66,6 +66,13 @@ export default function QuickCaptureBatchModeScreen() {
   const draftId = params.draftId;
   const isFlaggedReview = params.mode === 'flagged_review';
 
+  // Stable options reference — see QC tray screen for why an inline literal
+  // here triggers React error #185 under frequent parent re-renders.
+  const stackScreenOptions = useMemo(
+    () => ({ title: 'Edit receipt', headerShown: true, headerBackTitle: 'Tray' }),
+    [],
+  );
+
   const draft = MOCK_DRAFTS_BY_ID[draftId] ?? MOCK_DRAFTS_BY_ID['demo-1'];
 
   const dotItems: DotItem[] = useMemo(() => {
@@ -88,13 +95,7 @@ export default function QuickCaptureBatchModeScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen
-        options={{
-          title: 'Edit receipt',
-          headerShown: true,
-          headerBackTitle: 'Tray',
-        }}
-      />
+      <Stack.Screen options={stackScreenOptions} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.statusRow}>
           <DotRow
