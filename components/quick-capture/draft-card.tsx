@@ -28,6 +28,7 @@ import { TextInput } from '@/components/ui/text-input';
 import { Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { CategoryKey } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
+import { formatMinor } from '@/lib/fx/currency';
 import { effectiveQuickPicks } from '@/lib/fx/currencies';
 import {
   type DraftExpense,
@@ -280,13 +281,11 @@ function formatDate(iso: string): string {
 }
 
 function formatTotal(ext: ExtractedExpense): string {
-  // `total_cents` is stored as integer cents per schema; convert to display.
-  // CurrencyInput library handles minor units in bigint, but here we just need
-  // a glance-formatted string. Schema decimals are fixed at 2 for this field
-  // (the schema uses cents); for non-2-decimal currencies the AI is expected
-  // to return correctly-scaled cents per its spec contract.
-  const n = ext.total_cents / 100;
-  return `${ext.currency} ${n.toFixed(2)}`;
+  // total_cents holds minor units per the currency's ISO 4217 minor-unit
+  // count: 100 per SGD/USD/EUR, 1 per JPY/VND/KRW (no fractional unit),
+  // 1000 per BHD/KWD. formatMinor handles the per-currency decimals so
+  // VND 129000 displays as "VND 129,000" not "VND 1290.00".
+  return `${ext.currency} ${formatMinor(BigInt(ext.total_cents), ext.currency)}`;
 }
 
 // ─── Trailing trailing icon ──────────────────────────────────────────────

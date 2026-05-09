@@ -25,6 +25,7 @@ import { Text } from '@/components/ui/text';
 import { TextInput } from '@/components/ui/text-input';
 import { Neutral, Radius, Rhythm, Space } from '@/constants/theme';
 import { CATEGORIES, type ExtractedExpense, TAX_MODES_AI } from '@/lib/ai/schema';
+import { formatMinor } from '@/lib/fx/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -420,25 +421,20 @@ function ItemRow({
             currency={currency}
           />
         </View>
-        <View style={styles.itemTotalField}>
-          <Text variant="caption" color="textSecondary">
-            Subtotal
-          </Text>
-          <Text variant="bodyStrong" tabularNums>
-            {formatMinor(item.amount_cents, currency)}
-          </Text>
-        </View>
+      </View>
+      <View style={styles.itemSubtotalRow}>
+        <Text variant="caption" color="textSecondary">
+          Subtotal
+        </Text>
+        <Text variant="bodyStrong" tabularNums>
+          {currency} {formatMinor(BigInt(item.amount_cents), currency)}
+        </Text>
       </View>
     </View>
   );
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
-
-function formatMinor(amount_cents: number, currency: string): string {
-  const value = amount_cents / 100;
-  return `${currency} ${value.toFixed(2)}`;
-}
 
 // Exported for testing.
 export function __computeFormDrift(value: ExtractedExpense): number {
@@ -558,10 +554,11 @@ const styles = StyleSheet.create({
   itemUnitField: {
     flex: 1,
   },
-  itemTotalField: {
-    minWidth: 96,
-    alignItems: 'flex-end',
-    gap: Space[4],
+  itemSubtotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingTop: Space[4],
   },
   saveBar: {
     position: 'absolute',
