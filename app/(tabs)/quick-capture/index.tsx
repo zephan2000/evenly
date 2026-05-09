@@ -711,6 +711,12 @@ export default function QuickCaptureTrayScreen() {
             onRetrySave={handleRetrySave}
             onRePick={handleRePick}
             onChangeTripForDraft={handleChangeTripForDraft}
+            onViewSaved={(expenseId) =>
+              router.push({
+                pathname: '/expenses/[id]',
+                params: { id: expenseId },
+              })
+            }
           />
         ))}
       </ScrollView>

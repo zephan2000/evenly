@@ -82,6 +82,11 @@ export type DraftCardProps = {
   // Per-receipt trip override (§5.7.1) — invoked by the per-card chip; the
   // parent opens a single-card trip picker sheet.
   onChangeTripForDraft: (draftId: string) => void;
+
+  // Saved-state navigation: jump to the C6 detail screen for the persisted
+  // expense. The parent does the routing; this component just surfaces
+  // the affordance when the draft has a server expense_id.
+  onViewSaved?: (expenseId: string) => void;
 };
 
 export function DraftCard({
@@ -98,6 +103,7 @@ export function DraftCard({
   onRetrySave,
   onRePick,
   onChangeTripForDraft,
+  onViewSaved,
 }: DraftCardProps) {
   const visible = visibleStatusOf(draft);
   const merchant = draft.extracted?.merchant?.trim() ? draft.extracted.merchant : null;
@@ -157,6 +163,17 @@ export function DraftCard({
           onOpenFullEdit={onOpenFullEdit}
           onDiscard={onDiscard}
         />
+      ) : null}
+
+      {visible === 'saved' && draft.expenseId && onViewSaved ? (
+        <View style={styles.savedActions}>
+          <Button
+            label="View saved expense"
+            variant="ghost"
+            size="sm"
+            onPress={() => onViewSaved(draft.expenseId!)}
+          />
+        </View>
       ) : null}
 
       {expanded && draft.extracted ? (
@@ -573,6 +590,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tripChipRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Space[12],
+    paddingBottom: Space[12],
+  },
+  savedActions: {
     flexDirection: 'row',
     paddingHorizontal: Space[12],
     paddingBottom: Space[12],
