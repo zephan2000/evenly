@@ -15,6 +15,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
+import { CurrencyPickerSheet } from '@/components/quick-capture/currency-picker-sheet';
 import { DraftCard, type TripSummary } from '@/components/quick-capture/draft-card';
 import {
   TripPickerSheet,
@@ -31,6 +32,7 @@ import { TextInput } from '@/components/ui/text-input';
 import { Brand, Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
 import { createTrip, listTrips, type TripRecord } from '@/lib/db/trips';
+import { QUICK_PICKS } from '@/lib/fx/currencies';
 import { createRealDeps } from '@/lib/quick-capture/deps';
 import { runExtractions, runUploads } from '@/lib/quick-capture/orchestrator';
 import { pickReceiptImages } from '@/lib/quick-capture/picker';
@@ -925,8 +927,6 @@ function countByTrip(drafts: DraftExpense[]): Record<string, number> {
 
 // ─── Create-trip sheet ───────────────────────────────────────────────────
 
-const CURRENCY_OPTIONS = ['SGD', 'USD', 'EUR', 'JPY', 'MYR', 'GBP'];
-
 function CreateTripSheet({
   sheetRef,
   form,
@@ -943,41 +943,61 @@ function CreateTripSheet({
   const trimmedName = form.name.trim();
   const validCurrency = /^[A-Z]{3}$/.test(form.currency.trim().toUpperCase());
   const canSubmit = trimmedName.length > 0 && validCurrency && !submitting;
+  const isCustomCurrency = !QUICK_PICKS.includes(form.currency as (typeof QUICK_PICKS)[number]);
+
+  const currencyPickerRef = useRef<BottomSheetHandle>(null);
 
   return (
-    <BottomSheet ref={sheetRef} title="New trip" snapPoints={['55%']}>
-      <View style={createTripStyles.body}>
-        <TextInput
-          label="Name"
-          placeholder="Bali Apr 2026"
-          value={form.name}
-          onChangeText={(name) => onChange({ ...form, name })}
-          autoFocus
-          editable={!submitting}
-        />
-        <View style={createTripStyles.currencyRow}>
-          <Text variant="subtitle">Home currency</Text>
-          <View style={createTripStyles.currencyChips}>
-            {CURRENCY_OPTIONS.map((c) => (
+    <>
+      <BottomSheet ref={sheetRef} title="New trip" snapPoints={['55%']}>
+        <View style={createTripStyles.body}>
+          <TextInput
+            label="Name"
+            placeholder="Bali Apr 2026"
+            value={form.name}
+            onChangeText={(name) => onChange({ ...form, name })}
+            autoFocus
+            editable={!submitting}
+          />
+          <View style={createTripStyles.currencyRow}>
+            <Text variant="subtitle">Home currency</Text>
+            <View style={createTripStyles.currencyChips}>
+              {QUICK_PICKS.map((c) => (
+                <Chip
+                  key={c}
+                  label={c}
+                  selected={form.currency === c}
+                  onPress={() => onChange({ ...form, currency: c })}
+                />
+              ))}
               <Chip
-                key={c}
-                label={c}
-                selected={form.currency === c}
-                onPress={() => onChange({ ...form, currency: c })}
+                label={isCustomCurrency ? form.currency : 'Other'}
+                selected={isCustomCurrency}
+                onPress={() => currencyPickerRef.current?.present()}
+                accessibilityLabel="Pick another currency"
               />
-            ))}
+            </View>
           </View>
+          <Button
+            label={submitting ? 'Creating…' : 'Create trip'}
+            variant="primary"
+            size="md"
+            fullWidth
+            disabled={!canSubmit}
+            onPress={onSubmit}
+          />
         </View>
-        <Button
-          label={submitting ? 'Creating…' : 'Create trip'}
-          variant="primary"
-          size="md"
-          fullWidth
-          disabled={!canSubmit}
-          onPress={onSubmit}
-        />
-      </View>
-    </BottomSheet>
+      </BottomSheet>
+      <CurrencyPickerSheet
+        ref={currencyPickerRef}
+        selectedCode={form.currency}
+        title="Trip home currency"
+        onSelect={(code) => {
+          onChange({ ...form, currency: code });
+          currencyPickerRef.current?.dismiss();
+        }}
+      />
+    </>
   );
 }
 

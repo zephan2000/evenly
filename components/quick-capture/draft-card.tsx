@@ -12,9 +12,11 @@
 //   - Per-receipt trip chip appears only when batch is in `per_receipt` mode.
 
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import { CurrencyPickerSheet } from '@/components/quick-capture/currency-picker-sheet';
+import { type BottomSheetHandle } from '@/components/ui/bottom-sheet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CategoryIcon } from '@/components/ui/category-icon';
@@ -26,6 +28,7 @@ import { TextInput } from '@/components/ui/text-input';
 import { Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { CategoryKey } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
+import { QUICK_PICKS } from '@/lib/fx/currencies';
 import {
   type DraftExpense,
   type TripMode,
@@ -48,8 +51,6 @@ const VISIBLE_CATEGORY_KEYS: CategoryKey[] = [
 function paletteCategory(key: string): CategoryKey {
   return (VISIBLE_CATEGORY_KEYS as string[]).includes(key) ? (key as CategoryKey) : 'other';
 }
-
-const CURRENCY_QUICK_PICKS = ['SGD', 'USD', 'EUR', 'MYR', 'JPY'] as const;
 
 export type TripSummary = {
   id: string;
@@ -440,7 +441,10 @@ function ExpandedEditor({
   onCollapse: () => void;
 }) {
   const ext = draft.extracted;
+  const currencyPickerRef = useRef<BottomSheetHandle>(null);
   if (!ext) return null;
+
+  const isCustomCurrency = !QUICK_PICKS.includes(ext.currency as (typeof QUICK_PICKS)[number]);
 
   return (
     <View style={styles.editor}>
@@ -472,7 +476,7 @@ function ExpandedEditor({
           Currency
         </Text>
         <View style={styles.chipRow}>
-          {CURRENCY_QUICK_PICKS.map((c) => (
+          {QUICK_PICKS.map((c) => (
             <Chip
               key={c}
               label={c}
@@ -480,8 +484,24 @@ function ExpandedEditor({
               onPress={() => onApplyEdit(draft.id, { currency: c })}
             />
           ))}
+          <Chip
+            label={isCustomCurrency ? ext.currency : 'Other'}
+            selected={isCustomCurrency}
+            onPress={() => currencyPickerRef.current?.present()}
+            accessibilityLabel="Pick another currency"
+          />
         </View>
       </View>
+
+      <CurrencyPickerSheet
+        ref={currencyPickerRef}
+        selectedCode={ext.currency}
+        title="Receipt currency"
+        onSelect={(code) => {
+          onApplyEdit(draft.id, { currency: code });
+          currencyPickerRef.current?.dismiss();
+        }}
+      />
 
       <View>
         <Text variant="caption" color="textSecondary" style={styles.fieldLabel}>
