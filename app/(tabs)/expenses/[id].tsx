@@ -70,10 +70,25 @@ type FetchState =
   | { kind: 'not_found' }
   | { kind: 'error'; message: string };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function extractIdFromPathname(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const segments = window.location.pathname.split('/').filter(Boolean);
+  const idx = segments.indexOf('expenses');
+  if (idx < 0) return undefined;
+  const candidate = segments[idx + 1];
+  return candidate && UUID_RE.test(candidate) ? candidate : undefined;
+}
+
 export default function SavedExpenseDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
-  const expenseId = params.id;
+  // Defensive: if expo-router's hook hasn't surfaced the path param yet
+  // (it occasionally returns the bare object during the first render on
+  // web), fall back to parsing the pathname directly. Mirrors the
+  // server-side parsing in app/api/expenses/[id]+api.ts.
+  const expenseId = params.id || extractIdFromPathname();
   const { getToken, isSignedIn } = useAuth();
 
   const stackScreenOptions = useMemo(
