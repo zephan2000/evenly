@@ -83,8 +83,14 @@ export function createRealDeps({
         },
         body: JSON.stringify({ receipt_path: uploadedKey }),
       });
+      // The /api/extract response wraps the parsed expense in `value`, not
+      // `data`, because the server-side Result<T, E> shape in
+      // lib/ai/extract.ts uses {ok:true, value:T}. The client previously
+      // read json.data — undefined at runtime — and dispatched
+      // EXTRACT_SUCCEEDED with extracted=undefined, which crashed the
+      // reducer the next time it touched extracted.confidence.
       const json = (await res.json().catch(() => null)) as
-        | { ok: true; data: import('@/lib/ai/schema').PersistedExpense }
+        | { ok: true; value: import('@/lib/ai/schema').ExtractedExpense }
         | { ok: false; error: { kind: string; detail?: string } }
         | null;
       if (!res.ok || !json || json.ok !== true) {
@@ -96,11 +102,7 @@ export function createRealDeps({
             : `HTTP ${res.status}`;
         throw new Error(`extract_failed: ${msg}`);
       }
-      // PersistedExpense has tax_mode in {inclusive, exclusive}; ExtractedExpense
-      // (DraftExpense.extracted) accepts {inclusive, exclusive, none}. The
-      // server already collapses 'none' → 'exclusive' before persisting, so the
-      // reverse is a no-op widening.
-      return { extracted: json.data };
+      return { extracted: json.value };
     },
 
     async saveExpense(draft) {
