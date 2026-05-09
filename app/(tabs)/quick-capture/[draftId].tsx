@@ -1,64 +1,31 @@
-// Quick capture — batch-mode C5 wrapper, spec §5.3.
+// Quick capture — full-edit screen (C5 batch-mode wrapper, spec §5.3).
 //
-// Full-screen edit fallback for advanced/manual correction. Renders the
-// status row (DotRow + caption per §5.3) above a placeholder editor that
-// will be replaced by Codex's polished M1 C5 form when that stabilizes.
+// Reached from the tray's per-card "Open full edit" action when inline
+// quick-edit isn't enough. Composes the reusable ExpenseEditForm against
+// the QC reducer state shared via QuickCaptureProvider so edits flow
+// straight back to the tray's view of the draft.
 //
-// State note: this screen is read-only against the parent's reducer. Edits
-// here would be patched via APPLY_INLINE_EDIT once the real C5 form is wired
-// in. For M1.5 mockup, the screen is a structural shell + navigation chrome.
+// State boundary: this screen is read/write against the same reducer the
+// tray reads. APPLY_INLINE_EDIT covers every field the form mutates, so
+// the form's onChange just maps a Partial<ExtractedExpense> patch onto a
+// dispatch. No local form state.
+//
+// Status row (DotRow + caption per spec §5.3) is rendered above the form
+// via the form's `statusRow` slot. In flagged-review mode the primary
+// action label adapts to "Done & next flagged" / "Done & finish review".
 
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { Alert, View } from 'react-native';
 
+import { ExpenseEditForm } from '@/components/expense/expense-edit-form';
 import { Banner } from '@/components/ui/banner';
-import { Button } from '@/components/ui/button';
 import { DotRow, type DotItem, type DotState } from '@/components/ui/dot-row';
-import { Neutral, Space } from '@/constants/theme';
+import { Text } from '@/components/ui/text';
+import { Space } from '@/constants/theme';
+import type { ExtractedExpense } from '@/lib/ai/schema';
+import { useQuickCaptureDispatch, useQuickCaptureState } from '@/lib/quick-capture/context';
 import { type DraftExpense, type VisibleStatus, visibleStatusOf } from '@/lib/quick-capture/state';
-
-// Mock fixtures for the standalone preview — the real screen reads state
-// from the parent reducer via context. M1.5 mockup uses a static stub so the
-// route is reachable for visual review.
-const MOCK_DRAFTS_BY_ID: Record<string, DraftExpense> = {
-  'demo-1': {
-    id: 'demo-1',
-    imageUri: '',
-    tripId: 'trip-bali',
-    status: 'ready',
-    reviewState: 'needs_review',
-    uploadedKey: 'k',
-    extracted: {
-      merchant: 'Roadside cafe',
-      expense_date: '2026-04-23',
-      currency: 'SGD',
-      tax_mode: 'exclusive',
-      tax_label: 'GST',
-      items: [],
-      subtotal_cents: 800,
-      service_charge_cents: 0,
-      tip_cents: 0,
-      tax_amount_cents: 56,
-      total_cents: 856,
-      category_guess: 'meals',
-      confidence: { overall: 0.5, items: 0.5, totals: 0.55 },
-      notes: '',
-    },
-    expenseId: null,
-    error: null,
-    retryCount: 0,
-  },
-};
-
-const MOCK_BATCH_ORDER = [
-  { id: 'demo-0', visible: 'saved' as VisibleStatus, merchant: 'Hawker Heaven' },
-  { id: 'demo-1', visible: 'needs_review' as VisibleStatus, merchant: 'Roadside cafe' },
-  { id: 'demo-2', visible: 'ready' as VisibleStatus, merchant: 'Ubud Spa' },
-  { id: 'demo-3', visible: 'failed' as VisibleStatus, merchant: 'Receipt 4' },
-  { id: 'demo-4', visible: 'ready' as VisibleStatus, merchant: 'Receipt 5' },
-  { id: 'demo-5', visible: 'processing' as VisibleStatus, merchant: '…' },
-];
 
 export default function QuickCaptureBatchModeScreen() {
   const router = useRouter();
@@ -66,90 +33,155 @@ export default function QuickCaptureBatchModeScreen() {
   const draftId = params.draftId;
   const isFlaggedReview = params.mode === 'flagged_review';
 
-  // Stable options reference — see QC tray screen for why an inline literal
-  // here triggers React error #185 under frequent parent re-renders.
+  const state = useQuickCaptureState();
+  const dispatch = useQuickCaptureDispatch();
+
+  // Stable Stack.Screen options — see QC tray for the React #185 reason.
   const stackScreenOptions = useMemo(
     () => ({ title: 'Edit receipt', headerShown: true, headerBackTitle: 'Tray' }),
     [],
   );
 
-  const draft = MOCK_DRAFTS_BY_ID[draftId] ?? MOCK_DRAFTS_BY_ID['demo-1'];
+  const visibleDrafts = useMemo(
+    () => state.drafts.filter((d) => d.status !== 'discarded'),
+    [state.drafts],
+  );
+
+  const draft = useMemo<DraftExpense | undefined>(
+    () => visibleDrafts.find((d) => d.id === draftId),
+    [visibleDrafts, draftId],
+  );
+
+  const indexInBatch = visibleDrafts.findIndex((d) => d.id === draftId);
+  const totalCount = visibleDrafts.length;
 
   const dotItems: DotItem[] = useMemo(() => {
-    return MOCK_BATCH_ORDER.map((m) => ({
-      id: m.id,
-      state: visibleToDotState(m.visible, m.id === draftId),
-      label: m.merchant,
+    return visibleDrafts.map((d) => ({
+      id: d.id,
+      state: visibleToDotState(visibleStatusOf(d), d.id === draftId),
+      label: d.extracted?.merchant ?? '',
     }));
-  }, [draftId]);
+  }, [visibleDrafts, draftId]);
 
-  const indexInBatch = MOCK_BATCH_ORDER.findIndex((m) => m.id === draftId);
-  const totalCount = MOCK_BATCH_ORDER.length;
-  const merchantLabel = draft.extracted?.merchant ?? 'Receipt';
+  const handleApplyEdit = useCallback(
+    (patch: Partial<ExtractedExpense>) => {
+      if (!draftId) return;
+      dispatch({ type: 'APPLY_INLINE_EDIT', draftId, patch });
+    },
+    [dispatch, draftId],
+  );
+
+  const handleNavigateToDraft = useCallback(
+    (id: string) => {
+      router.replace({
+        pathname: '/(tabs)/quick-capture/[draftId]',
+        params: { draftId: id, ...(isFlaggedReview ? { mode: 'flagged_review' } : {}) },
+      });
+    },
+    [router, isFlaggedReview],
+  );
+
+  const handleDone = useCallback(() => {
+    if (!isFlaggedReview) {
+      router.replace('/(tabs)/quick-capture');
+      return;
+    }
+    // Flagged-review flow: jump to the next still-flagged draft, or back to
+    // the tray when all flagged drafts are resolved.
+    const nextFlagged = visibleDrafts
+      .slice(indexInBatch + 1)
+      .find(
+        (d) =>
+          d.reviewState === 'needs_review' ||
+          d.reviewState === 'failed' ||
+          d.status === 'upload_failed' ||
+          d.status === 'extract_failed',
+      );
+    if (nextFlagged) {
+      handleNavigateToDraft(nextFlagged.id);
+    } else {
+      router.replace('/(tabs)/quick-capture');
+    }
+  }, [isFlaggedReview, indexInBatch, visibleDrafts, router, handleNavigateToDraft]);
+
+  // Empty / missing-draft fallback. Happens if the user deep-linked here
+  // without a current batch (e.g. cold-launched the route directly), or
+  // if the batch was discarded while the screen was open.
+  if (!draft || !draft.extracted) {
+    return (
+      <View style={styles.fallback}>
+        <Stack.Screen options={stackScreenOptions} />
+        <Banner
+          variant="info"
+          title="No draft to edit"
+          description={
+            !draft
+              ? "This receipt isn't in the current quick-capture batch. Head back to the tray and try again."
+              : 'Extraction is still running. Once it finishes, the form will populate here.'
+          }
+        />
+      </View>
+    );
+  }
+
+  const visible = visibleStatusOf(draft);
+  const merchantLabel = draft.extracted.merchant?.trim() || 'Receipt';
   const captionText = `Receipt ${indexInBatch + 1} of ${totalCount} — ${merchantLabel}`;
 
   const primaryActionLabel = primaryActionLabelFor({
     isFlaggedReview,
-    isLastFlagged: isFlaggedReview && !hasNextFlagged(draftId),
+    isLastFlagged: isFlaggedReview && !hasNextFlagged(visibleDrafts, indexInBatch),
   });
 
   return (
-    <View style={styles.screen}>
+    <>
       <Stack.Screen options={stackScreenOptions} />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.statusRow}>
-          <DotRow
-            items={dotItems}
-            caption={captionText}
-            onSelect={(id) =>
-              router.replace({
-                pathname: '/(tabs)/quick-capture/[draftId]',
-                params: { draftId: id, ...(isFlaggedReview ? { mode: 'flagged_review' } : {}) },
-              })
-            }
-            accessibilityLabel={`Receipt ${indexInBatch + 1} of ${totalCount}`}
-          />
-        </View>
-
-        <Banner
-          variant="info"
-          title="C5 form goes here"
-          description="The full-edit form (Receipt / Items / Totals / Notes) is owned by the M1 single-receipt C5 implementation. This screen will compose that form once it stabilizes; for now it's a structural shell so the dot-row and navigation chrome can be reviewed."
-        />
-
-        {visibleStatusOf(draft) === 'needs_review' ? (
-          <Banner
-            variant="warning"
-            title="Needs review"
-            description="Confidence was low on this extraction. Touching any field clears the flag."
-          />
-        ) : null}
-        {visibleStatusOf(draft) === 'failed' ? (
-          <Banner
-            variant="error"
-            title="Save failed"
-            description="The receipt couldn't be saved. Try Retry save from the tray, or edit and save manually."
-          />
-        ) : null}
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <Button
-          label="Back to tray"
-          variant="ghost"
-          size="md"
-          onPress={() => router.replace('/(tabs)/quick-capture')}
-        />
-        <Button
-          label={primaryActionLabel}
-          variant="primary"
-          size="md"
-          onPress={() => router.replace('/(tabs)/quick-capture')}
-        />
-      </View>
-    </View>
+      <ExpenseEditForm
+        value={draft.extracted}
+        onChange={handleApplyEdit}
+        receiptImage={draft.imageUri || undefined}
+        primaryActionLabel={primaryActionLabel}
+        onPrimaryAction={handleDone}
+        statusRow={
+          totalCount > 1 ? (
+            <View style={styles.statusRow}>
+              <DotRow
+                items={dotItems}
+                caption={captionText}
+                onSelect={handleNavigateToDraft}
+                accessibilityLabel={`Receipt ${indexInBatch + 1} of ${totalCount}`}
+              />
+            </View>
+          ) : null
+        }
+        topBanner={
+          visible === 'needs_review' ? (
+            <Banner
+              variant="warning"
+              title="Needs review"
+              description="Confidence was low on this extraction. Touching any field clears the flag."
+            />
+          ) : visible === 'failed' ? (
+            <Banner
+              variant="error"
+              title="Save failed"
+              description="The receipt couldn't be saved. Edit and tap Done to return to the tray and retry."
+            />
+          ) : null
+        }
+        onPressReceipt={() => {
+          // TODO(quick-capture): full-screen receipt preview is a follow-up.
+          Alert.alert(
+            'Receipt preview',
+            'Full-screen preview is not wired yet. Tap Done to return.',
+          );
+        }}
+      />
+    </>
   );
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
 
 function visibleToDotState(visible: VisibleStatus, isCurrent: boolean): DotState {
   if (isCurrent) return 'current';
@@ -179,39 +211,28 @@ function primaryActionLabelFor({
   return 'Done & next flagged';
 }
 
-function hasNextFlagged(currentId: string): boolean {
-  const idx = MOCK_BATCH_ORDER.findIndex((m) => m.id === currentId);
-  return MOCK_BATCH_ORDER.slice(idx + 1).some(
-    (m) => m.visible === 'needs_review' || m.visible === 'failed',
-  );
+function hasNextFlagged(drafts: DraftExpense[], fromIndex: number): boolean {
+  return drafts
+    .slice(fromIndex + 1)
+    .some(
+      (d) =>
+        d.reviewState === 'needs_review' ||
+        d.reviewState === 'failed' ||
+        d.status === 'upload_failed' ||
+        d.status === 'extract_failed',
+    );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Neutral.canvas,
-  },
-  content: {
+const styles = {
+  fallback: {
     padding: Space[16],
-    gap: Space[16],
-    paddingBottom: 120,
+    gap: Space[12],
   },
   statusRow: {
     paddingVertical: Space[8],
   },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Space[8],
-    backgroundColor: Neutral.surface,
-    borderTopWidth: 1,
-    borderTopColor: Neutral.borderSubtle,
-    paddingHorizontal: Space[16],
-    paddingTop: Space[12],
-    paddingBottom: Space[24],
-  },
-});
+} as const;
+
+// Quiet the tree-shake noise: Text is imported by the form indirectly, but
+// we keep the import here in case future status-row variants render it.
+void Text;

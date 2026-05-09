@@ -12,7 +12,7 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { CurrencyPickerSheet } from '@/components/quick-capture/currency-picker-sheet';
@@ -33,6 +33,7 @@ import { Brand, Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
 import { createTrip, listTrips, type TripRecord } from '@/lib/db/trips';
 import { QUICK_PICKS } from '@/lib/fx/currencies';
+import { useQuickCaptureDispatch, useQuickCaptureState } from '@/lib/quick-capture/context';
 import { createRealDeps } from '@/lib/quick-capture/deps';
 import { runExtractions, runUploads } from '@/lib/quick-capture/orchestrator';
 import { pickReceiptImages } from '@/lib/quick-capture/picker';
@@ -44,7 +45,6 @@ import {
   isBatchTerminal,
   MAX_BATCH_IMAGES,
   processingDraftCount,
-  reducer,
   readyDraftCount,
   savedDraftCount,
 } from '@/lib/quick-capture/state';
@@ -71,19 +71,6 @@ const MOCK_EXTRACTED: ExtractedExpense = {
   confidence: { overall: 0.92, items: 0.9, totals: 0.95 },
   notes: '',
 };
-
-function emptyBatch(): BatchDraft {
-  return {
-    id: '',
-    serverId: null,
-    defaultTripId: '',
-    tripMode: 'batch',
-    createdAt: '',
-    drafts: [],
-    mode: 'tray',
-    cursorIndex: 0,
-  };
-}
 
 // ─── Trips fetch state ───────────────────────────────────────────────────
 
@@ -118,7 +105,8 @@ export default function QuickCaptureTrayScreen() {
   // commit-phase loop (React error #185) once the parent re-renders often.
   const stackScreenOptions = useMemo(() => ({ title: 'Quick capture', headerShown: true }), []);
 
-  const [state, dispatch] = useReducer(reducer, undefined, emptyBatch);
+  const state = useQuickCaptureState();
+  const dispatch = useQuickCaptureDispatch();
   const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
   const [tripPicker, setTripPicker] = useState<TripPickerState>({ kind: 'closed' });
   const [pendingDisablePerReceipt, setPendingDisablePerReceipt] = useState<string | null>(null);
