@@ -141,6 +141,17 @@ export default function QuickCaptureTrayScreen() {
   const uploadInFlightRef = useRef(false);
   const extractInFlightRef = useRef(false);
 
+  // Stash getToken in a ref so callbacks/memos that need it don't take it
+  // as a dep. Clerk's useAuth() returns a fresh function reference on every
+  // render even though the underlying behavior is stable; treating it as a
+  // dep destabilizes downstream useMemo/useCallback and re-fires effects on
+  // every render, which under heavy state churn (e.g. orchestrator
+  // dispatches during upload failures) hits React's commit-recursion limit.
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   const trips = useMemo<TripRecord[]>(
     () => (tripsState.kind === 'ready' && Array.isArray(tripsState.trips) ? tripsState.trips : []),
     [tripsState],
@@ -163,7 +174,7 @@ export default function QuickCaptureTrayScreen() {
   const refetchTrips = useCallback(async () => {
     setTripsState({ kind: 'loading' });
     try {
-      const list = await listTrips(async () => getToken());
+      const list = await listTrips(() => getTokenRef.current());
       setTripsState({ kind: 'ready', trips: list });
     } catch (e) {
       setTripsState({
@@ -171,7 +182,7 @@ export default function QuickCaptureTrayScreen() {
         message: e instanceof Error ? e.message : 'Failed to load trips',
       });
     }
-  }, [getToken]);
+  }, []);
 
   // Fetch trips once per signed-in session. Use a ref guard rather than
   // tripsState.kind because refetchTrips synchronously sets state to a NEW
@@ -215,7 +226,7 @@ export default function QuickCaptureTrayScreen() {
     const tripForBatch = trips.find((t) => t.id === state.defaultTripId);
     if (!tripForBatch) return null;
     return createRealDeps({
-      getToken: async () => getToken(),
+      getToken: () => getTokenRef.current(),
       uploadTripId: tripForBatch.id,
       saveContext: {
         tripId: tripForBatch.id,
@@ -223,7 +234,7 @@ export default function QuickCaptureTrayScreen() {
         createdByMemberId: tripForBatch.owner_member_id,
       },
     });
-  }, [isRealBatch, isSignedIn, getToken, state.defaultTripId, trips]);
+  }, [isRealBatch, isSignedIn, state.defaultTripId, trips]);
 
   // ─── Initialize batch from route params (real picker landing) ──────────
   useEffect(() => {
@@ -629,7 +640,7 @@ export default function QuickCaptureTrayScreen() {
             if (!name || !/^[A-Z]{3}$/.test(currency)) return;
             setCreatingTrip(true);
             try {
-              await createTrip(async () => getToken(), {
+              await createTrip(() => getTokenRef.current(), {
                 name,
                 home_currency: currency,
               });
