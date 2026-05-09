@@ -15,11 +15,13 @@
 // action label adapts to "Done & next flagged" / "Done & finish review".
 
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { Alert, View } from 'react-native';
 
 import { ExpenseEditForm } from '@/components/expense/expense-edit-form';
+import { CurrencyPickerSheet } from '@/components/quick-capture/currency-picker-sheet';
 import { Banner } from '@/components/ui/banner';
+import { type BottomSheetHandle } from '@/components/ui/bottom-sheet';
 import { DotRow, type DotItem, type DotState } from '@/components/ui/dot-row';
 import { Text } from '@/components/ui/text';
 import { Space } from '@/constants/theme';
@@ -35,6 +37,8 @@ export default function QuickCaptureBatchModeScreen() {
 
   const state = useQuickCaptureState();
   const dispatch = useQuickCaptureDispatch();
+
+  const currencyPickerRef = useRef<BottomSheetHandle>(null);
 
   // Stable Stack.Screen options — see QC tray for the React #185 reason.
   const stackScreenOptions = useMemo(
@@ -142,6 +146,7 @@ export default function QuickCaptureBatchModeScreen() {
         receiptImage={draft.imageUri || undefined}
         primaryActionLabel={primaryActionLabel}
         onPrimaryAction={handleDone}
+        onChangeCurrency={() => currencyPickerRef.current?.present()}
         statusRow={
           totalCount > 1 ? (
             <View style={styles.statusRow}>
@@ -175,6 +180,15 @@ export default function QuickCaptureBatchModeScreen() {
             'Receipt preview',
             'Full-screen preview is not wired yet. Tap Done to return.',
           );
+        }}
+      />
+      <CurrencyPickerSheet
+        ref={currencyPickerRef}
+        selectedCode={draft.extracted.currency}
+        title="Receipt currency"
+        onSelect={(code) => {
+          handleApplyEdit({ currency: code });
+          currencyPickerRef.current?.dismiss();
         }}
       />
     </>

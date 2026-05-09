@@ -136,16 +136,16 @@ export function ExpenseEditForm({
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {statusRow ? <View style={styles.statusRow}>{statusRow}</View> : null}
 
-        {/* Currency override — top of screen per ux-principles "Bill splitting specifics" */}
+        {/* Receipt currency override — top of screen per ux-principles "Bill splitting specifics" */}
         <View style={styles.currencyRow}>
           <Text variant="caption" color="textSecondary">
-            Currency
+            Receipt currency
           </Text>
           <Chip
             label={value.currency}
             selected
             onPress={onChangeCurrency}
-            accessibilityLabel={`Currency: ${value.currency}${onChangeCurrency ? '. Tap to change.' : ''}`}
+            accessibilityLabel={`Receipt currency: ${value.currency}${onChangeCurrency ? '. Tap to change.' : ''}`}
           />
         </View>
 

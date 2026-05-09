@@ -35,6 +35,22 @@ export const QUICK_PICKS = [
   'GBP',
 ] as const;
 
+/**
+ * Compute the chip list to display given a current selection. If the
+ * current selection is already in QUICK_PICKS, the returned list is
+ * QUICK_PICKS verbatim. Otherwise, the current selection takes the
+ * first chip slot and the last QUICK_PICK (GBP) is dropped — keeping
+ * the row length stable while making the user's actual currency a
+ * first-class chip without forcing them through the picker every time.
+ *
+ * Example: extracted currency NPR (Nepalese Rupee, not in QUICK_PICKS)
+ * yields [NPR, SGD, USD, EUR, JPY, MYR, THB, IDR, VND, AUD] — 10 chips.
+ */
+export function effectiveQuickPicks(current: string): readonly string[] {
+  if ((QUICK_PICKS as readonly string[]).includes(current)) return QUICK_PICKS;
+  return [current, ...QUICK_PICKS.slice(0, QUICK_PICKS.length - 1)];
+}
+
 /** Full ISO 4217 list (active currencies). Sorted by code. */
 export const ALL_CURRENCIES: readonly CurrencyEntry[] = [
   { code: 'AED', name: 'UAE Dirham' },

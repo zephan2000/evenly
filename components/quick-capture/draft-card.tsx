@@ -28,7 +28,7 @@ import { TextInput } from '@/components/ui/text-input';
 import { Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { CategoryKey } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
-import { QUICK_PICKS } from '@/lib/fx/currencies';
+import { effectiveQuickPicks } from '@/lib/fx/currencies';
 import {
   type DraftExpense,
   type TripMode,
@@ -444,7 +444,7 @@ function ExpandedEditor({
   const currencyPickerRef = useRef<BottomSheetHandle>(null);
   if (!ext) return null;
 
-  const isCustomCurrency = !QUICK_PICKS.includes(ext.currency as (typeof QUICK_PICKS)[number]);
+  const displayedPicks = effectiveQuickPicks(ext.currency);
 
   return (
     <View style={styles.editor}>
@@ -473,10 +473,10 @@ function ExpandedEditor({
 
       <View>
         <Text variant="caption" color="textSecondary" style={styles.fieldLabel}>
-          Currency
+          Receipt currency
         </Text>
         <View style={styles.chipRow}>
-          {QUICK_PICKS.map((c) => (
+          {displayedPicks.map((c) => (
             <Chip
               key={c}
               label={c}
@@ -485,8 +485,7 @@ function ExpandedEditor({
             />
           ))}
           <Chip
-            label={isCustomCurrency ? ext.currency : 'Other'}
-            selected={isCustomCurrency}
+            label="Other"
             onPress={() => currencyPickerRef.current?.present()}
             accessibilityLabel="Pick another currency"
           />

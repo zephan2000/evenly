@@ -32,7 +32,7 @@ import { TextInput } from '@/components/ui/text-input';
 import { Brand, Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
 import { createTrip, listTrips, type TripRecord } from '@/lib/db/trips';
-import { QUICK_PICKS } from '@/lib/fx/currencies';
+import { effectiveQuickPicks } from '@/lib/fx/currencies';
 import { useQuickCaptureDispatch, useQuickCaptureState } from '@/lib/quick-capture/context';
 import { createRealDeps } from '@/lib/quick-capture/deps';
 import { runExtractions, runUploads } from '@/lib/quick-capture/orchestrator';
@@ -931,7 +931,7 @@ function CreateTripSheet({
   const trimmedName = form.name.trim();
   const validCurrency = /^[A-Z]{3}$/.test(form.currency.trim().toUpperCase());
   const canSubmit = trimmedName.length > 0 && validCurrency && !submitting;
-  const isCustomCurrency = !QUICK_PICKS.includes(form.currency as (typeof QUICK_PICKS)[number]);
+  const displayedPicks = effectiveQuickPicks(form.currency);
 
   const currencyPickerRef = useRef<BottomSheetHandle>(null);
 
@@ -948,9 +948,9 @@ function CreateTripSheet({
             editable={!submitting}
           />
           <View style={createTripStyles.currencyRow}>
-            <Text variant="subtitle">Home currency</Text>
+            <Text variant="subtitle">Settlement currency</Text>
             <View style={createTripStyles.currencyChips}>
-              {QUICK_PICKS.map((c) => (
+              {displayedPicks.map((c) => (
                 <Chip
                   key={c}
                   label={c}
@@ -959,8 +959,7 @@ function CreateTripSheet({
                 />
               ))}
               <Chip
-                label={isCustomCurrency ? form.currency : 'Other'}
-                selected={isCustomCurrency}
+                label="Other"
                 onPress={() => currencyPickerRef.current?.present()}
                 accessibilityLabel="Pick another currency"
               />
@@ -979,7 +978,7 @@ function CreateTripSheet({
       <CurrencyPickerSheet
         ref={currencyPickerRef}
         selectedCode={form.currency}
-        title="Trip home currency"
+        title="Settlement currency"
         onSelect={(code) => {
           onChange({ ...form, currency: code });
           currencyPickerRef.current?.dismiss();
