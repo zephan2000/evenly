@@ -35,7 +35,7 @@ import { createTrip, listTrips, type TripRecord } from '@/lib/db/trips';
 import { effectiveQuickPicks } from '@/lib/fx/currencies';
 import { useQuickCaptureDispatch, useQuickCaptureState } from '@/lib/quick-capture/context';
 import { createRealDeps } from '@/lib/quick-capture/deps';
-import { runExtractions, runUploads } from '@/lib/quick-capture/orchestrator';
+import { runExtractions, runSaves, runUploads } from '@/lib/quick-capture/orchestrator';
 import { pickReceiptImages } from '@/lib/quick-capture/picker';
 import {
   type BatchDraft,
@@ -524,6 +524,15 @@ export default function QuickCaptureTrayScreen() {
 
   const performBulkSave = useCallback(() => {
     saveAllConfirmRef.current?.dismiss();
+    if (realDeps) {
+      // Real batch: orchestrator dispatches SAVE_STARTED / SAVE_SUCCEEDED /
+      // SAVE_FAILED for each ready+unreviewed draft and round-trips through
+      // /api/expenses (createUserClient → save_expense_with_items RPC).
+      void runSaves(state, dispatch, realDeps);
+      return;
+    }
+    // Demo batch: keep the in-memory simulator so visual review still
+    // exercises the save UI without auth or a real Supabase row.
     state.drafts.forEach((d) => {
       if (d.status !== 'ready' || d.reviewState !== 'none') return;
       dispatch({ type: 'SAVE_STARTED', draftId: d.id });
@@ -532,7 +541,7 @@ export default function QuickCaptureTrayScreen() {
         600 + Math.random() * 600,
       );
     });
-  }, [state.drafts]);
+  }, [state, realDeps, dispatch]);
 
   const handleReviewFlagged = useCallback(() => {
     saveAllConfirmRef.current?.dismiss();
