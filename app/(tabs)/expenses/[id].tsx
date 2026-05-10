@@ -100,7 +100,20 @@ export default function SavedExpenseDetailScreen() {
 
   const refetch = useCallback(async () => {
     if (!expenseId) {
-      setFetchState({ kind: 'error', message: 'Missing expense id.' });
+      // Diagnostic info — surface what the screen actually received so we
+      // can see whether it's params, the pathname, or both that are empty.
+      const paramsJson = (() => {
+        try {
+          return JSON.stringify(params);
+        } catch {
+          return '<unserializable>';
+        }
+      })();
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '<no window>';
+      setFetchState({
+        kind: 'error',
+        message: `Missing expense id. params=${paramsJson} pathname=${pathname}`,
+      });
       return;
     }
     setFetchState({ kind: 'loading' });
@@ -117,7 +130,7 @@ export default function SavedExpenseDetailScreen() {
         message: e instanceof Error ? e.message : 'Failed to load',
       });
     }
-  }, [expenseId, getToken]);
+  }, [expenseId, getToken, params]);
 
   useEffect(() => {
     if (!isSignedIn) return;
