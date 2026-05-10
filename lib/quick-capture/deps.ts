@@ -145,6 +145,15 @@ export function createRealDeps({
         const msg = json && 'error' in json ? json.error : `HTTP ${res.status}`;
         throw new Error(`save_failed: ${msg}`);
       }
+      // TEMP diagnostic — remove once the missing-expense-id issue is solved.
+      // Surfaces in the browser DevTools console; helps confirm what
+      // expense_id (if any) the server actually returns for a given save.
+       
+      console.log('[deps.saveExpense] server response', {
+        expense_id: json.expense_id,
+        type: typeof json.expense_id,
+        full: json,
+      });
       return { expenseId: json.expense_id };
     },
   };
