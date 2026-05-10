@@ -77,8 +77,6 @@ const TAX_MODE_OPTIONS = TAX_MODES_AI.map((m) => ({
   label: m === 'inclusive' ? 'Inclusive' : m === 'exclusive' ? 'Exclusive' : 'None',
 }));
 
-const ITEMS_INITIAL_VISIBLE = 3;
-
 // ─── Component ───────────────────────────────────────────────────────────
 
 export function ExpenseEditForm({
@@ -94,11 +92,6 @@ export function ExpenseEditForm({
   onChangeCurrency,
   onPressReceipt,
 }: ExpenseEditFormProps) {
-  const [showAllItems, setShowAllItems] = React.useState(false);
-
-  const visibleItems = showAllItems ? value.items : value.items.slice(0, ITEMS_INITIAL_VISIBLE);
-  const hiddenCount = Math.max(0, value.items.length - ITEMS_INITIAL_VISIBLE);
-
   // Math-drift check — not blocking, just an inline note.
   const computedTotal =
     value.subtotal_cents + value.service_charge_cents + value.tip_cents + value.tax_amount_cents;
@@ -124,7 +117,6 @@ export function ExpenseEditForm({
       { name: '', quantity: 1, unit_amount_cents: 0, amount_cents: 0 },
     ];
     onChange({ items: next });
-    setShowAllItems(true);
   };
 
   const removeItem = (index: number) => {
@@ -213,25 +205,13 @@ export function ExpenseEditForm({
         </Section>
 
         {/* ─── Items section ─── */}
-        <Section
-          title="Items"
-          trailing={
-            value.items.length > ITEMS_INITIAL_VISIBLE && !showAllItems ? (
-              <Button
-                label={`Show all ${value.items.length}`}
-                variant="ghost"
-                size="sm"
-                onPress={() => setShowAllItems(true)}
-              />
-            ) : null
-          }
-        >
+        <Section title="Items">
           {value.items.length === 0 ? (
             <Text variant="body" color="textSecondary">
               No items extracted. Add one below if you need to.
             </Text>
           ) : (
-            visibleItems.map((item, idx) => (
+            value.items.map((item, idx) => (
               <ItemRow
                 key={idx}
                 item={item}
@@ -241,14 +221,6 @@ export function ExpenseEditForm({
               />
             ))
           )}
-          {showAllItems && hiddenCount > 0 ? (
-            <Button
-              label="Show fewer"
-              variant="ghost"
-              size="sm"
-              onPress={() => setShowAllItems(false)}
-            />
-          ) : null}
           <Button label="+ Add item" variant="ghost" size="sm" onPress={addItem} />
         </Section>
 
