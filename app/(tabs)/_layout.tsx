@@ -46,6 +46,18 @@ export default function TabLayout() {
               ),
             }}
           />
+          {/*
+            Hide nested route trees from the tab bar. Expo Router auto-
+            registers every immediate child of (tabs) as a tab; passing
+            href: null keeps the route reachable via router.push but
+            removes it from the tab strip. Without this, dynamic routes
+            like expenses/[id] render a tab that navigates to
+            /expenses/undefined (the literal string), and inner stacks
+            like quick-capture leak as top-level tabs with the wrong
+            icon and label.
+          */}
+          <Tabs.Screen name="quick-capture" options={{ href: null }} />
+          <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
         </Tabs>
       </SignedIn>
       <SignedOut>
