@@ -6,14 +6,22 @@
 // the locked visual register: active 100% opacity + accent border + slight
 // scale-up; completed 70% opacity; future 30% opacity, non-interactive.
 //
-// Visual tokens are intentionally working-register (neutral border, no
-// brand color). Codex's editorial pass will refine the accent and shadow.
+// Visual tokens follow the editorial working register: neutral structure,
+// soft brand accent only for the active step, and a restrained lift.
 
-import React, { forwardRef, useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  View,
+  type ViewStyle,
+} from 'react-native';
 
 import { Text } from '@/components/ui/text';
-import { Neutral, Radius, Space } from '@/constants/theme';
+import { Brand, Neutral, Radius, Rhythm, Shadow, Space } from '@/constants/theme';
 import type { WizardStepStatus } from '@/lib/ux/spotlight-wizard-logic';
 
 export type WizardStepProps = {
@@ -70,11 +78,34 @@ export const WizardStep = forwardRef<View, WizardStepProps>(function WizardStep(
 ) {
   const opacity = useRef(new Animated.Value(OPACITY_BY_STATUS[status])).current;
   const scale = useRef(new Animated.Value(SCALE_BY_STATUS[status])).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+
+    const subscription = AccessibilityInfo.addEventListener?.(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    return () => {
+      mounted = false;
+      subscription?.remove();
+    };
+  }, []);
 
   // Animate opacity + scale whenever status changes. The locked spec
   // calls for 200ms ease-out on both. Native driver works for these two
   // properties on both web (via @react-native/web's polyfill) and native.
   useEffect(() => {
+    if (reduceMotion) {
+      opacity.setValue(OPACITY_BY_STATUS[status]);
+      scale.setValue(SCALE_BY_STATUS[status]);
+      return;
+    }
+
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: OPACITY_BY_STATUS[status],
@@ -89,7 +120,7 @@ export const WizardStep = forwardRef<View, WizardStepProps>(function WizardStep(
         useNativeDriver: true,
       }),
     ]).start();
-  }, [status, opacity, scale]);
+  }, [status, opacity, reduceMotion, scale]);
 
   const isInteractive = !disabled && status !== 'future' && !!onActivate;
   const isActive = status === 'active';
@@ -107,7 +138,7 @@ export const WizardStep = forwardRef<View, WizardStepProps>(function WizardStep(
           <Text variant="caption" color="textSecondary" style={styles.indexLabel}>
             {`Step ${index + 1} of ${total}`}
           </Text>
-          <Text variant="title" nativeID={`wizard-step-${id}-title`}>
+          <Text variant="subtitle" nativeID={`wizard-step-${id}-title`}>
             {title}
           </Text>
         </View>
@@ -177,19 +208,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Neutral.borderSubtle,
     borderRadius: Radius.card,
-    padding: Space[16],
-    gap: Space[12],
+    paddingHorizontal: Space[16],
+    paddingVertical: Space[16],
+    gap: Space[16],
   },
   containerActive: {
-    // Working register: a hairline emphasis on the active border. Codex
-    // will replace with the brand accent + shadow.
-    borderColor: Neutral.textPrimary,
+    borderColor: Brand.accent,
+    ...(Shadow.xs as ViewStyle),
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space[8],
+    gap: Space[12],
+    minHeight: Rhythm.tapTargetMin,
   },
   headerLeft: {
     flex: 1,
@@ -197,16 +229,21 @@ const styles = StyleSheet.create({
   },
   indexLabel: {
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   trailing: {
-    // Container for whatever the caller passes via trailing — typically
-    // a Chip or a small button.
+    minHeight: Rhythm.tapTargetMin,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   summarySlot: {
-    // Collapsed-mode body — one line summary.
+    minHeight: Rhythm.tapTargetMin,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Space[4],
   },
   contentSlot: {
-    // Full step body when active or non-collapsed.
+    gap: Space[12],
   },
 });
