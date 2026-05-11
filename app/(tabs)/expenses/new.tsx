@@ -1,16 +1,15 @@
 // Manual expense entry (Tricount-style typed entry, no receipt).
 //
 // Reached from a "Manual entry" affordance on home (Codex's lane) or
-// from /quick-capture's empty state. Reads the current trip from
-// AsyncStorage (the same key home persists), fetches the trip to
-// resolve home_currency + owner_member_id, then mounts the existing
+// from /quick-capture's empty state. Reads the current trip via the
+// shared lib/storage/current-trip helper, fetches the trip to resolve
+// home_currency + owner_member_id, then mounts the existing
 // ExpenseEditForm with empty defaults.
 //
 // On save, POSTs to /api/expenses with receipt_image_path=null. The
 // server schema accepts that; the DB column is nullable.
 
 import { useAuth } from '@clerk/clerk-expo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
@@ -25,8 +24,7 @@ import { Neutral, Space } from '@/constants/theme';
 import { type ExtractedExpense, type PersistedExpense } from '@/lib/ai/schema';
 import { saveManualExpense } from '@/lib/db/expenses';
 import { listTrips, type TripRecord } from '@/lib/db/trips';
-
-const TRIP_STORAGE_KEY = 'evenly:current_trip_v1';
+import { getCurrentTripId, setCurrentTripId } from '@/lib/storage/current-trip';
 
 function todayIso(): string {
   const now = new Date();
@@ -90,7 +88,7 @@ export default function ManualExpenseEntryScreen() {
       try {
         const [trips, storedId] = await Promise.all([
           listTrips(() => getTokenRef.current()),
-          AsyncStorage.getItem(TRIP_STORAGE_KEY),
+          getCurrentTripId(),
         ]);
         if (cancelled) return;
         if (trips.length === 0) {
@@ -134,6 +132,9 @@ export default function ManualExpenseEntryScreen() {
         createdByMemberId: load.trip.owner_member_id,
         expense,
       });
+      // Persist so the home re-focuses onto the trip we just wrote to
+      // (vs. whatever was the last picker selection on home).
+      await setCurrentTripId(load.trip.id);
       router.replace(`/expenses/${expenseId}`);
     } catch (e) {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Unknown error');

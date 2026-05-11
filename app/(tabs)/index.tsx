@@ -1,11 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@clerk/clerk-expo';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useMockFontSet } from '@/components/mockup-font-provider';
+import {
+  CreateTripSheet,
+  emptyCreateTripForm,
+  type CreateTripSheetForm,
+} from '@/components/trip/create-trip-sheet';
 import {
   AppScreen,
   Banner,
@@ -29,10 +33,9 @@ import {
   listExpenses,
   sumHomeAmount,
 } from '@/lib/db/expenses';
-import { listTrips, type TripRecord } from '@/lib/db/trips';
+import { createTripWithMembers, listTrips, type TripRecord } from '@/lib/db/trips';
 import { formatMinor } from '@/lib/fx/currency';
-
-const CURRENT_TRIP_STORAGE_KEY = 'evenly:current_trip_v1';
+import { getCurrentTripId, setCurrentTripId } from '@/lib/storage/current-trip';
 const VISIBLE_CATEGORY_KEYS: CategoryKey[] = [
   'meals',
   'transport',
@@ -181,7 +184,7 @@ export default function HomeScreen() {
     try {
       const [nextTrips, storedTripId] = await Promise.all([
         listTrips(() => getTokenRef.current()),
-        AsyncStorage.getItem(CURRENT_TRIP_STORAGE_KEY),
+        getCurrentTripId(),
       ]);
       setTrips(nextTrips);
 
@@ -191,10 +194,8 @@ export default function HomeScreen() {
       const nextSelectedId = persistedTrip?.id ?? nextTrips[0]?.id ?? null;
       setSelectedTripId(nextSelectedId);
 
-      if (nextSelectedId && nextSelectedId !== storedTripId) {
-        await AsyncStorage.setItem(CURRENT_TRIP_STORAGE_KEY, nextSelectedId);
-      } else if (!nextSelectedId) {
-        await AsyncStorage.removeItem(CURRENT_TRIP_STORAGE_KEY);
+      if (nextSelectedId !== storedTripId) {
+        await setCurrentTripId(nextSelectedId);
       }
       return nextSelectedId;
     } catch (e) {
@@ -226,12 +227,57 @@ export default function HomeScreen() {
   const handleTripSelect = useCallback(
     (tripId: string) => {
       setSelectedTripId(tripId);
-      void AsyncStorage.setItem(CURRENT_TRIP_STORAGE_KEY, tripId);
+      void setCurrentTripId(tripId);
       void loadExpensesForTrip(tripId);
       tripPickerRef.current?.dismiss();
     },
     [loadExpensesForTrip],
   );
+
+  // ─── Create-trip sheet (zero-trips empty + picker "+ New trip") ──────
+  const createTripSheetRef = useRef<BottomSheetHandle>(null);
+  const [createTripForm, setCreateTripForm] = useState<CreateTripSheetForm>(() =>
+    emptyCreateTripForm(),
+  );
+  const [creatingTrip, setCreatingTrip] = useState(false);
+
+  const openCreateTripSheet = useCallback(() => {
+    setCreateTripForm(emptyCreateTripForm());
+    tripPickerRef.current?.dismiss();
+    createTripSheetRef.current?.present();
+  }, []);
+
+  const handleCreateTripSubmit = useCallback(async () => {
+    const name = createTripForm.name.trim();
+    const currency = createTripForm.currency.trim().toUpperCase();
+    if (!name || !/^[A-Z]{3}$/.test(currency) || creatingTrip) return;
+    setCreatingTrip(true);
+    try {
+      const { trip, memberErrors } = await createTripWithMembers(
+        () => getTokenRef.current(),
+        { name, home_currency: currency },
+        createTripForm.memberNames,
+      );
+      await setCurrentTripId(trip.id);
+      setSelectedTripId(trip.id);
+      createTripSheetRef.current?.dismiss();
+      setCreateTripForm(emptyCreateTripForm());
+
+      // Refetch so the new trip appears in the list + the hero/expense
+      // section repaint against the new selection.
+      const nextTripId = await loadTrips();
+      await loadExpensesForTrip(nextTripId);
+
+      if (memberErrors.length > 0) {
+        const list = memberErrors.map((e) => e.display_name).join(', ');
+        Alert.alert('Trip created, some members didn’t save', list);
+      }
+    } catch (e) {
+      Alert.alert('Could not create trip', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setCreatingTrip(false);
+    }
+  }, [createTripForm, creatingTrip, loadExpensesForTrip, loadTrips]);
 
   const heroAmount = useMemo(() => {
     if (!selectedTrip || expensesState.kind !== 'ready' || sortedExpenses.length === 0) return '—';
@@ -307,7 +353,9 @@ export default function HomeScreen() {
                   label={heroPrimaryLabel}
                   size="lg"
                   leading={heroPrimaryLeading}
-                  onPress={() => router.push('/(tabs)/quick-capture')}
+                  onPress={
+                    hasTrips ? () => router.push('/(tabs)/quick-capture') : openCreateTripSheet
+                  }
                 />
                 {hasTrips ? (
                   <Button
@@ -441,12 +489,23 @@ export default function HomeScreen() {
           trips={trips}
           selectedTripId={selectedTripId ?? trips[0]?.id ?? ''}
           onSelectTrip={handleTripSelect}
-          onCreateTrip={() => {
+          onManageMembers={(tripId) => {
             tripPickerRef.current?.dismiss();
-            router.push('/(tabs)/quick-capture');
+            // Cast: typed routes regenerate on build, not in dev hot-edit, so
+            // the dynamic /trips/[id]/members route isn't yet in the Href union.
+            router.push(`/trips/${tripId}/members` as Href);
           }}
+          onCreateTrip={openCreateTripSheet}
         />
       ) : null}
+
+      <CreateTripSheet
+        ref={createTripSheetRef}
+        form={createTripForm}
+        onChange={setCreateTripForm}
+        submitting={creatingTrip}
+        onSubmit={handleCreateTripSubmit}
+      />
     </AppScreen>
   );
 }
@@ -458,8 +517,12 @@ const HomeTripPickerSheet = React.forwardRef<
     selectedTripId: string;
     onSelectTrip: (tripId: string) => void;
     onCreateTrip: () => void;
+    onManageMembers: (tripId: string) => void;
   }
->(function HomeTripPickerSheet({ trips, selectedTripId, onSelectTrip, onCreateTrip }, ref) {
+>(function HomeTripPickerSheet(
+  { trips, selectedTripId, onSelectTrip, onCreateTrip, onManageMembers },
+  ref,
+) {
   return (
     <BottomSheet ref={ref} title="Current trip" snapPoints={['55%']}>
       <View style={styles.tripPickerList}>
@@ -472,11 +535,25 @@ const HomeTripPickerSheet = React.forwardRef<
               subtitle={trip.home_currency}
               onPress={() => onSelectTrip(trip.id)}
               trailing={
-                selected ? (
-                  <View style={styles.selectedDot} />
-                ) : (
-                  <View style={styles.selectedDotEmpty} />
-                )
+                <View style={styles.tripRowTrailing}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Manage members in ${trip.name}`}
+                    onPress={() => onManageMembers(trip.id)}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.membersAffordance,
+                      pressed ? styles.membersAffordancePressed : null,
+                    ]}
+                  >
+                    <Ionicons name="people-outline" size={18} color={Brand.interactive} />
+                  </Pressable>
+                  {selected ? (
+                    <View style={styles.selectedDot} />
+                  ) : (
+                    <View style={styles.selectedDotEmpty} />
+                  )}
+                </View>
               }
               separator={index < trips.length - 1}
               accessibilityLabel={`${trip.name}${selected ? ', selected' : ''}`}
@@ -624,6 +701,22 @@ const styles = StyleSheet.create({
     borderColor: Neutral.borderSubtle,
     borderRadius: Radius.card,
     overflow: 'hidden',
+  },
+  tripRowTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  membersAffordance: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.washBg,
+  },
+  membersAffordancePressed: {
+    opacity: 0.7,
   },
   selectedDot: {
     width: 18,

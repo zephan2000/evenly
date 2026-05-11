@@ -15,12 +15,16 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { CurrencyPickerSheet } from '@/components/quick-capture/currency-picker-sheet';
 import { DraftCard, type TripSummary } from '@/components/quick-capture/draft-card';
 import {
   TripPickerSheet,
   type TripPickerResult,
 } from '@/components/quick-capture/trip-picker-sheet';
+import {
+  CreateTripSheet,
+  emptyCreateTripForm,
+  type CreateTripSheetForm,
+} from '@/components/trip/create-trip-sheet';
 import { Banner } from '@/components/ui/banner';
 import { BottomSheet, type BottomSheetHandle } from '@/components/ui/bottom-sheet';
 import { Button } from '@/components/ui/button';
@@ -28,14 +32,13 @@ import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { TextInput } from '@/components/ui/text-input';
 import { Brand, Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
-import { createTrip, listTrips, type TripRecord } from '@/lib/db/trips';
-import { effectiveQuickPicks } from '@/lib/fx/currencies';
+import { createTripWithMembers, listTrips, type TripRecord } from '@/lib/db/trips';
 import { useQuickCaptureDispatch, useQuickCaptureState } from '@/lib/quick-capture/context';
 import { createRealDeps } from '@/lib/quick-capture/deps';
 import { runExtractions, runSaves, runUploads } from '@/lib/quick-capture/orchestrator';
+import { setCurrentTripId } from '@/lib/storage/current-trip';
 import { pickReceiptImages } from '@/lib/quick-capture/picker';
 import {
   type BatchDraft,
@@ -111,10 +114,9 @@ export default function QuickCaptureTrayScreen() {
   const [tripPicker, setTripPicker] = useState<TripPickerState>({ kind: 'closed' });
   const [pendingDisablePerReceipt, setPendingDisablePerReceipt] = useState<string | null>(null);
   const [tripsState, setTripsState] = useState<TripsState>({ kind: 'loading' });
-  const [createTripForm, setCreateTripForm] = useState<{ name: string; currency: string }>({
-    name: '',
-    currency: 'SGD',
-  });
+  const [createTripForm, setCreateTripForm] = useState<CreateTripSheetForm>(() =>
+    emptyCreateTripForm(),
+  );
   const [creatingTrip, setCreatingTrip] = useState(false);
 
   const tripPickerRef = useRef<BottomSheetHandle>(null);
@@ -191,6 +193,16 @@ export default function QuickCaptureTrayScreen() {
     initialFetchRef.current = true;
     void refetchTrips();
   }, [isSignedIn, refetchTrips]);
+
+  // Persist the in-flight batch's trip id so the home re-focuses onto it
+  // when the user returns. Without this, the home reads its own stale
+  // current_trip_v1 (the trip that was selected before they entered QC)
+  // and shows zero expenses even after a successful save.
+  useEffect(() => {
+    if (state.defaultTripId && !state.defaultTripId.startsWith('demo-')) {
+      void setCurrentTripId(state.defaultTripId);
+    }
+  }, [state.defaultTripId]);
 
   const visibleDrafts = useMemo(
     () => state.drafts.filter((d) => d.status !== 'discarded'),
@@ -629,7 +641,7 @@ export default function QuickCaptureTrayScreen() {
           ) : null}
         </ScrollView>
         <CreateTripSheet
-          sheetRef={createTripSheetRef}
+          ref={createTripSheetRef}
           form={createTripForm}
           onChange={setCreateTripForm}
           submitting={creatingTrip}
@@ -639,13 +651,21 @@ export default function QuickCaptureTrayScreen() {
             if (!name || !/^[A-Z]{3}$/.test(currency)) return;
             setCreatingTrip(true);
             try {
-              await createTrip(() => getTokenRef.current(), {
-                name,
-                home_currency: currency,
-              });
+              const { trip, memberErrors } = await createTripWithMembers(
+                () => getTokenRef.current(),
+                { name, home_currency: currency },
+                createTripForm.memberNames,
+              );
+              // Persist immediately so home re-focuses onto the just-created trip
+              // instead of falling back to trips[0] after a refetch race.
+              await setCurrentTripId(trip.id);
               createTripSheetRef.current?.dismiss();
-              setCreateTripForm({ name: '', currency: 'SGD' });
+              setCreateTripForm(emptyCreateTripForm());
               await refetchTrips();
+              if (memberErrors.length > 0) {
+                const list = memberErrors.map((e) => e.display_name).join(', ');
+                Alert.alert('Trip created, some members didn’t save', list);
+              }
             } catch (e) {
               Alert.alert(
                 'Could not create trip',
@@ -922,96 +942,6 @@ function countByTrip(drafts: DraftExpense[]): Record<string, number> {
     return acc;
   }, {});
 }
-
-// ─── Create-trip sheet ───────────────────────────────────────────────────
-
-function CreateTripSheet({
-  sheetRef,
-  form,
-  onChange,
-  submitting,
-  onSubmit,
-}: {
-  sheetRef: React.RefObject<BottomSheetHandle | null>;
-  form: { name: string; currency: string };
-  onChange: (next: { name: string; currency: string }) => void;
-  submitting: boolean;
-  onSubmit: () => void;
-}) {
-  const trimmedName = form.name.trim();
-  const validCurrency = /^[A-Z]{3}$/.test(form.currency.trim().toUpperCase());
-  const canSubmit = trimmedName.length > 0 && validCurrency && !submitting;
-  const displayedPicks = effectiveQuickPicks(form.currency);
-
-  const currencyPickerRef = useRef<BottomSheetHandle>(null);
-
-  return (
-    <>
-      <BottomSheet ref={sheetRef} title="New trip" snapPoints={['55%']}>
-        <View style={createTripStyles.body}>
-          <TextInput
-            label="Name"
-            placeholder="Bali Apr 2026"
-            value={form.name}
-            onChangeText={(name) => onChange({ ...form, name })}
-            autoFocus
-            editable={!submitting}
-          />
-          <View style={createTripStyles.currencyRow}>
-            <Text variant="subtitle">Settlement currency</Text>
-            <View style={createTripStyles.currencyChips}>
-              {displayedPicks.map((c) => (
-                <Chip
-                  key={c}
-                  label={c}
-                  selected={form.currency === c}
-                  onPress={() => onChange({ ...form, currency: c })}
-                />
-              ))}
-              <Chip
-                label="Other"
-                onPress={() => currencyPickerRef.current?.present()}
-                accessibilityLabel="Pick another currency"
-              />
-            </View>
-          </View>
-          <Button
-            label={submitting ? 'Creating…' : 'Create trip'}
-            variant="primary"
-            size="md"
-            fullWidth
-            disabled={!canSubmit}
-            onPress={onSubmit}
-          />
-        </View>
-      </BottomSheet>
-      <CurrencyPickerSheet
-        ref={currencyPickerRef}
-        selectedCode={form.currency}
-        title="Settlement currency"
-        onSelect={(code) => {
-          onChange({ ...form, currency: code });
-          currencyPickerRef.current?.dismiss();
-        }}
-      />
-    </>
-  );
-}
-
-const createTripStyles = StyleSheet.create({
-  body: {
-    gap: Space[16],
-    paddingTop: Space[8],
-  },
-  currencyRow: {
-    gap: Space[8],
-  },
-  currencyChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space[8],
-  },
-});
 
 // ─── Styles ──────────────────────────────────────────────────────────────
 
