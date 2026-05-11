@@ -253,7 +253,12 @@ export default function HomeScreen() {
   const showViewAll = false;
   const canOpenTripPicker = trips.length > 0;
   const hasTrips = trips.length > 0;
-  const heroPrimaryLabel = hasTrips ? 'Add expense' : 'Create a trip';
+  const heroPrimaryLabel = hasTrips ? 'Smart scan' : 'Create a trip';
+  // Sparkle leading icon signals the AI-extract flow without committing the
+  // brand to a clinical "AI scan" label. Hidden in the zero-trips Create-CTA.
+  const heroPrimaryLeading = hasTrips ? (
+    <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+  ) : undefined;
   const heroMetaCenter =
     selectedTrip?.name ?? (hasTrips ? 'evenly' : 'create your first to start tracking');
   const heroMetaRight =
@@ -301,11 +306,12 @@ export default function HomeScreen() {
                 <Button
                   label={heroPrimaryLabel}
                   size="lg"
+                  leading={heroPrimaryLeading}
                   onPress={() => router.push('/(tabs)/quick-capture')}
                 />
                 {hasTrips ? (
                   <Button
-                    label="Type expense"
+                    label="Add expense"
                     variant="secondary"
                     size="md"
                     onPress={() => router.push('/expenses/new')}
@@ -390,7 +396,7 @@ export default function HomeScreen() {
             ) : recentExpenses.length === 0 ? (
               <View style={styles.emptyRecentRow}>
                 <Text variant="body" color="textSecondary">
-                  No expenses yet. Tap Add expense to get started.
+                  No expenses yet. Scan a receipt or add one to get started.
                 </Text>
               </View>
             ) : (

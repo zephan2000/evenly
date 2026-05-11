@@ -4,11 +4,12 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 
-import { Brand, Neutral, Radius, WebFocusRing } from '@/constants/theme';
+import { Brand, Neutral, Radius, Space, WebFocusRing } from '@/constants/theme';
 import { Text, type TextColorToken, type TextVariant } from './text';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
@@ -34,6 +35,13 @@ export type ButtonProps = {
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
+  /**
+   * Optional leading affordance (icon, sparkle, badge). Rendered to the
+   * left of the label with a fixed gap. Hidden while `loading` so the
+   * spinner sits centered. Callers own the icon's color — typically
+   * `#FFFFFF` for primary and `Brand.interactive` for secondary/ghost.
+   */
+  leading?: React.ReactNode;
   accessibilityLabel?: string;
   testID?: string;
 };
@@ -46,6 +54,7 @@ export function Button({
   disabled = false,
   loading = false,
   fullWidth = false,
+  leading,
   accessibilityLabel,
   testID,
 }: ButtonProps) {
@@ -77,9 +86,12 @@ export function Button({
           color={textColor === 'inverse' ? '#FFFFFF' : Brand.interactive}
         />
       ) : (
-        <Text variant={sz.textVariant} color={textColor}>
-          {label}
-        </Text>
+        <>
+          {leading ? <View style={styles.leading}>{leading}</View> : null}
+          <Text variant={sz.textVariant} color={textColor}>
+            {label}
+          </Text>
+        </>
       )}
     </Pressable>
   );
@@ -127,5 +139,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: Radius.button,
     minWidth: 44,
+    gap: Space[8],
+  },
+  leading: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
