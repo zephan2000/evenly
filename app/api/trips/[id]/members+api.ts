@@ -96,12 +96,19 @@ export async function POST(request: Request) {
   // checks that the trips row for trip_id is owned by current_user_id().
   // We don't pre-fetch the trip; if the caller isn't the owner, the insert
   // will fail with 403 from PostgREST.
+  //
+  // trip_members_identity_check requires EXACTLY ONE of (user_id, anon_id)
+  // to be set — owner rows fill user_id, guest rows fill anon_id. The
+  // share-link claim flow (post-MVP) will swap a guest's anon_id for a
+  // real user_id when they sign in. Until then, every member created
+  // through this endpoint is a guest, so we mint an anon_id here.
   const client = createUserClient(a.jwt);
   const { data, error } = await client
     .from('trip_members')
     .insert({
       trip_id: tripId,
       user_id: null,
+      anon_id: crypto.randomUUID(),
       display_name: parsed.data.display_name,
     })
     .select('id, trip_id, user_id, display_name, joined_at, claimed_at')
