@@ -95,3 +95,71 @@ export async function GET(request: Request) {
 
   return Response.json({ ok: true, expense, items: items ?? [] }, { status: 200 });
 }
+
+// DELETE /api/expenses/[id] — soft-delete by setting deleted_at = now().
+// The undo window is enforced client-side: the UI shows an undo toast for
+// ~5s, and the actual DELETE fetch is held until the toast expires. If the
+// user taps Undo, the fetch is cancelled — no server round-trip happens, no
+// row was ever touched. This keeps the server simple (no resurrection
+// endpoint, no TTL bookkeeping) and matches the ux-principles guidance to
+// 'undo over confirm.'
+//
+// Server-side undo (post-undo-window) is not supported. If the user reloads
+// or closes the tab during the window, the toast disappears and the delete
+// fires on the next time the queued task drains; if the tab is killed
+// outright before the fetch, the delete is silently dropped — the row stays.
+// That's acceptable: the deletion is a user intent that requires their
+// continued presence to commit.
+
+export async function DELETE(request: Request) {
+  const url = new URL(request.url);
+  const segments = url.pathname.split('/').filter(Boolean);
+  const id = segments[segments.length - 1];
+
+  if (!id || !UUID_RE.test(id)) {
+    return Response.json({ ok: false, error: 'invalid_id' }, { status: 400 });
+  }
+
+  const auth = getJwtFromRequest(request);
+  if (!auth.ok) {
+    return Response.json({ ok: false, error: auth.error.kind }, { status: 401 });
+  }
+
+  const claims = decodeJwtClaims(auth.jwt);
+  if (!claims?.sub) {
+    return Response.json({ ok: false, error: 'invalid_jwt' }, { status: 401 });
+  }
+
+  await upsertUserOnFirstSeen({
+    clerkUserId: claims.sub,
+    email: claims.email ?? null,
+    displayName: claims.name ?? null,
+  });
+
+  const client = createUserClient(auth.jwt);
+
+  // Soft-delete via UPDATE. The existing expenses_update_trip_owner RLS
+  // policy gates write access to the trip's owner; non-owners get filtered
+  // out and the affected-row count comes back zero. We treat zero rows as
+  // 'not found or forbidden' = 404 so we don't leak presence of an
+  // expense the caller can't see.
+  const { data, error } = await client
+    .from('expenses')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    return Response.json(
+      { ok: false, error: 'delete_failed', detail: error.message },
+      { status: 500 },
+    );
+  }
+  if (!data) {
+    return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
+  }
+
+  return Response.json({ ok: true, id: data.id }, { status: 200 });
+}

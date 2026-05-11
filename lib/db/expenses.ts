@@ -127,6 +127,40 @@ export async function getExpense(
   return { expense: json.expense, items: json.items };
 }
 
+type DeleteResponse = { ok: true; id: string } | { ok: false; error: string; detail?: string };
+
+/**
+ * Soft-delete a saved expense by setting deleted_at = now() server-side.
+ * Callers should wrap this in a UI-level undo window (typically ~5s) — the
+ * server has no resurrection path, so the call should only fire after the
+ * undo window has lapsed without an undo tap.
+ *
+ * 404 (not_found) means either the row doesn't exist or the caller can't
+ * see it (trips_select_owner RLS). The server intentionally doesn't
+ * distinguish — both should look identical to a non-owner.
+ */
+export async function deleteExpense(
+  getToken: GetToken,
+  id: string,
+  apiBase = '',
+): Promise<{ ok: true } | { ok: 'not_found' }> {
+  const token = await getToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch(`${apiBase}/api/expenses/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404) return { ok: 'not_found' };
+
+  const json = (await res.json().catch(() => null)) as DeleteResponse | null;
+  if (!res.ok || !json || json.ok !== true) {
+    const msg = json && 'error' in json ? json.error : `HTTP ${res.status}`;
+    throw new Error(`delete_expense_failed: ${msg}`);
+  }
+  return { ok: true };
+}
+
 /**
  * Format an expense's primary money value for glance display.
  * Uses the original currency (not home_amount) — what the user paid is
