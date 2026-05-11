@@ -303,12 +303,7 @@ export default function SavedExpenseDetailScreen() {
             variant="primary"
             size="lg"
             fullWidth
-            onPress={() => {
-              Alert.alert(
-                'Splitting coming soon',
-                'M2 — share groups, per-person panels, proportional tax. Coming up next.',
-              );
-            }}
+            onPress={() => router.push(`/expenses/${expense.id}/split`)}
           />
           <Button
             label="Scan another"
