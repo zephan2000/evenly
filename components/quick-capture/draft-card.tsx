@@ -171,18 +171,7 @@ export function DraftCard({
             label="View saved expense"
             variant="ghost"
             size="sm"
-            onPress={() => {
-              // TEMP diagnostic — remove once missing-expense-id is solved.
-               
-              console.log('[DraftCard] View saved expense click', {
-                draftId: draft.id,
-                expenseId: draft.expenseId,
-                type: typeof draft.expenseId,
-                visible,
-                status: draft.status,
-              });
-              onViewSaved(draft.expenseId!);
-            }}
+            onPress={() => onViewSaved(draft.expenseId!)}
           />
         </View>
       ) : null}

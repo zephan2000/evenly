@@ -9,7 +9,7 @@
 
 import { useAuth } from '@clerk/clerk-expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Banner } from '@/components/ui/banner';
@@ -98,27 +98,23 @@ export default function SavedExpenseDetailScreen() {
 
   const [fetchState, setFetchState] = useState<FetchState>({ kind: 'loading' });
 
+  // Stash getToken in a ref so refetch doesn't recreate every render — Clerk
+  // hands back a fresh function identity each pass. Without this, refetch is
+  // unstable, the useEffect below re-fires every render, and we end up in a
+  // fetch loop.
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   const refetch = useCallback(async () => {
     if (!expenseId) {
-      // Diagnostic info — surface what the screen actually received so we
-      // can see whether it's params, the pathname, or both that are empty.
-      const paramsJson = (() => {
-        try {
-          return JSON.stringify(params);
-        } catch {
-          return '<unserializable>';
-        }
-      })();
-      const pathname = typeof window !== 'undefined' ? window.location.pathname : '<no window>';
-      setFetchState({
-        kind: 'error',
-        message: `Missing expense id. params=${paramsJson} pathname=${pathname}`,
-      });
+      setFetchState({ kind: 'error', message: 'Missing expense id.' });
       return;
     }
     setFetchState({ kind: 'loading' });
     try {
-      const detail = await getExpense(async () => getToken(), expenseId);
+      const detail = await getExpense(() => getTokenRef.current(), expenseId);
       if (!detail) {
         setFetchState({ kind: 'not_found' });
       } else {
@@ -130,12 +126,11 @@ export default function SavedExpenseDetailScreen() {
         message: e instanceof Error ? e.message : 'Failed to load',
       });
     }
-  }, [expenseId, getToken, params]);
+  }, [expenseId]);
 
   useEffect(() => {
     if (!isSignedIn) return;
     void refetch();
-    // refetch is a useCallback; safe to depend on.
   }, [isSignedIn, refetch]);
 
   if (fetchState.kind === 'loading') {
