@@ -1,10 +1,21 @@
-// POST /api/expenses — persists an edited expense + line items via the
-// save_expense_with_items RPC (atomic transaction). RLS gates the inserts.
+// /api/expenses
+//   GET  — list saved expenses for a trip (trip_id query param required).
+//          Sorted by expense_date desc, created_at desc. Limit 50.
+//          Returns the expense rows only (no items) for the home Recent list
+//          and the future /expenses list screen. For full detail + items,
+//          use GET /api/expenses/[id].
+//   POST — persists an edited expense + line items via the
+//          save_expense_with_items RPC (atomic transaction). RLS gates the
+//          inserts.
 
 import { z } from 'zod';
+
 import { PersistedExpenseSchema } from '@/lib/ai/schema';
-import { getJwtFromRequest } from '@/lib/auth/server';
+import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
 import { createUserClient } from '@/lib/db/server';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LIST_LIMIT = 50;
 
 // Milestone-1 scan flow always uploads a receipt before save, so the path is
 // required here. Manual-entry-without-receipt (post-MVP) gets a separate route.
@@ -15,6 +26,73 @@ const SaveExpenseRequestSchema = z.object({
   receipt_image_path: z.string().min(1),
   expense: PersistedExpenseSchema,
 });
+
+export async function GET(request: Request) {
+  const auth = getJwtFromRequest(request);
+  if (!auth.ok) {
+    return Response.json({ ok: false, error: auth.error.kind }, { status: 401 });
+  }
+
+  const claims = decodeJwtClaims(auth.jwt);
+  if (!claims?.sub) {
+    return Response.json({ ok: false, error: 'invalid_jwt' }, { status: 401 });
+  }
+
+  // Ensure the public.users row exists so trips/expenses RLS resolves.
+  await upsertUserOnFirstSeen({
+    clerkUserId: claims.sub,
+    email: claims.email ?? null,
+    displayName: claims.name ?? null,
+  });
+
+  const url = new URL(request.url);
+  const tripId = url.searchParams.get('trip_id');
+  if (!tripId || !UUID_RE.test(tripId)) {
+    return Response.json({ ok: false, error: 'trip_id_required' }, { status: 400 });
+  }
+
+  const client = createUserClient(auth.jwt);
+  const { data, error } = await client
+    .from('expenses')
+    .select(
+      [
+        'id',
+        'trip_id',
+        'merchant',
+        'expense_date',
+        'category',
+        'original_amount',
+        'original_currency',
+        'fx_rate',
+        'fx_rate_status',
+        'home_amount',
+        'subtotal',
+        'service_charge',
+        'tip',
+        'tax_amount',
+        'tax_mode',
+        'tax_label',
+        'receipt_image_path',
+        'notes',
+        'created_at',
+        'updated_at',
+      ].join(', '),
+    )
+    .eq('trip_id', tripId)
+    .is('deleted_at', null)
+    .order('expense_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(LIST_LIMIT);
+
+  if (error) {
+    return Response.json(
+      { ok: false, error: 'list_failed', detail: error.message },
+      { status: 500 },
+    );
+  }
+
+  return Response.json({ ok: true, expenses: data ?? [] }, { status: 200 });
+}
 
 export async function POST(request: Request) {
   const auth = getJwtFromRequest(request);
