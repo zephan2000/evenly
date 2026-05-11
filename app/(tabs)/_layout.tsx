@@ -58,6 +58,7 @@ export default function TabLayout() {
           */}
           <Tabs.Screen name="quick-capture" options={{ href: null }} />
           <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
+          <Tabs.Screen name="expenses/new" options={{ href: null }} />
         </Tabs>
       </SignedIn>
       <SignedOut>

@@ -19,11 +19,15 @@ const LIST_LIMIT = 50;
 
 // Milestone-1 scan flow always uploads a receipt before save, so the path is
 // required here. Manual-entry-without-receipt (post-MVP) gets a separate route.
+// receipt_image_path is required for the scan flow but optional for manual
+// entry (Tricount-style typed expenses with no receipt). Empty/missing →
+// null in the DB. The save_expense_with_items RPC accepts null per its
+// signature; existing column is nullable text.
 const SaveExpenseRequestSchema = z.object({
   trip_id: z.string().uuid(),
   payer_member_id: z.string().uuid(),
   created_by_member_id: z.string().uuid(),
-  receipt_image_path: z.string().min(1),
+  receipt_image_path: z.string().min(1).nullable().optional(),
   expense: PersistedExpenseSchema,
 });
 
@@ -135,7 +139,11 @@ export async function POST(request: Request) {
     p_tax_amount: expense.tax_amount_cents,
     p_tax_mode: expense.tax_mode,
     p_tax_label: expense.tax_label,
-    p_receipt_image_path: receipt_image_path,
+    // The generated Database type marks p_receipt_image_path as
+    // non-nullable, but the underlying Postgres column + RPC signature both
+    // accept null (manual-entry / Tricount-style expenses have no
+    // receipt). Cast at the boundary; regenerating types is post-MVP.
+    p_receipt_image_path: (receipt_image_path ?? null) as unknown as string,
     p_notes: expense.notes,
     p_items: expense.items.map((item, idx) => ({
       name: item.name,

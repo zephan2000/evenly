@@ -127,7 +127,54 @@ export async function getExpense(
   return { expense: json.expense, items: json.items };
 }
 
+type SaveResponse =
+  | { ok: true; expense_id: string }
+  | { ok: false; error: string; detail?: string };
+
 type DeleteResponse = { ok: true; id: string } | { ok: false; error: string; detail?: string };
+
+export type SaveManualExpenseArgs = {
+  tripId: string;
+  payerMemberId: string;
+  createdByMemberId: string;
+  expense: import('@/lib/ai/schema').PersistedExpense;
+};
+
+/**
+ * Save a manually-entered expense (no receipt). Mirrors the scan-flow
+ * save path but passes receipt_image_path as null. The server schema
+ * accepts null for Tricount-style typed entries; the DB column is
+ * nullable.
+ */
+export async function saveManualExpense(
+  getToken: GetToken,
+  args: SaveManualExpenseArgs,
+  apiBase = '',
+): Promise<string> {
+  const token = await getToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch(`${apiBase}/api/expenses`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      trip_id: args.tripId,
+      payer_member_id: args.payerMemberId,
+      created_by_member_id: args.createdByMemberId,
+      receipt_image_path: null,
+      expense: args.expense,
+    }),
+  });
+  const json = (await res.json().catch(() => null)) as SaveResponse | null;
+  if (!res.ok || !json || json.ok !== true) {
+    const msg = json && 'error' in json ? json.error : `HTTP ${res.status}`;
+    throw new Error(`save_manual_expense_failed: ${msg}`);
+  }
+  return json.expense_id;
+}
 
 /**
  * Soft-delete a saved expense by setting deleted_at = now() server-side.
