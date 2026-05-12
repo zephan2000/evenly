@@ -11,7 +11,7 @@
 // State: pure presentational. Parent owns the ExtractedExpense and feeds
 // changes back via onChange(patch). The form never owns long-term state.
 
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Banner } from '@/components/ui/banner';
@@ -92,11 +92,36 @@ export function ExpenseEditForm({
   onChangeCurrency,
   onPressReceipt,
 }: ExpenseEditFormProps) {
-  // Math-drift check — not blocking, just an inline note.
-  const computedTotal =
-    value.subtotal_cents + value.service_charge_cents + value.tip_cents + value.tax_amount_cents;
-  const drift = Math.abs(computedTotal - value.total_cents);
-  const hasMathDrift = drift > 1;
+  // Total is always derived from its parts — see docs/specs/m2-splitting.md §5.
+  //   inclusive: total = subtotal + service + tip       (tax already inside subtotal)
+  //   exclusive: total = subtotal + service + tip + tax
+  //   none:      total = subtotal + service + tip       (tax_amount should be 0)
+  // We compute through bigint to keep the arithmetic exact at the cents level
+  // before narrowing back to number for the schema.
+  const computedTotalCents = useMemo(() => {
+    return computeTotalCents({
+      subtotal_cents: value.subtotal_cents,
+      service_charge_cents: value.service_charge_cents,
+      tip_cents: value.tip_cents,
+      tax_amount_cents: value.tax_amount_cents,
+      tax_mode: value.tax_mode,
+    });
+  }, [
+    value.subtotal_cents,
+    value.service_charge_cents,
+    value.tip_cents,
+    value.tax_amount_cents,
+    value.tax_mode,
+  ]);
+
+  // Sync the derived total back to the parent so persistence sees the right
+  // number. Safe vs. infinite loops: once parent reflects the same value, the
+  // effect's equality check no-ops.
+  useEffect(() => {
+    if (value.total_cents !== computedTotalCents) {
+      onChange({ total_cents: computedTotalCents });
+    }
+  }, [computedTotalCents, value.total_cents, onChange]);
 
   const showLowConfidence = value.confidence.overall < 0.7;
 
@@ -277,16 +302,19 @@ export function ExpenseEditForm({
           <View style={styles.totalRow}>
             <View style={styles.totalLabelRow}>
               <Text variant="subtitle">Total</Text>
-              {hasMathDrift ? (
-                <Text variant="caption" color="warningFg">
-                  These don&apos;t add up — check?
-                </Text>
-              ) : null}
+              <Text variant="caption" color="textSecondary">
+                Auto-calculated
+              </Text>
             </View>
             <CurrencyInput
-              value={BigInt(value.total_cents)}
-              onChangeMinor={(v) => onChange({ total_cents: v === null ? 0 : Number(v) })}
+              value={BigInt(computedTotalCents)}
+              // Read-only: Total derives from subtotal + service + tip (+ tax
+              // when exclusive). onChangeMinor is required by the type but
+              // can't fire when editable is false.
+              onChangeMinor={() => {}}
               currency={value.currency}
+              editable={false}
+              accessibilityLabel="Total (auto-calculated)"
             />
           </View>
         </Section>
@@ -408,15 +436,27 @@ function ItemRow({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-// Exported for testing.
-export function __computeFormDrift(value: ExtractedExpense): number {
-  return Math.abs(
-    value.subtotal_cents +
-      value.service_charge_cents +
-      value.tip_cents +
-      value.tax_amount_cents -
-      value.total_cents,
-  );
+/**
+ * Derive total_cents from its components. Cents-as-bigint internally for
+ * precision; returns number to match the schema. tax_mode semantics:
+ *   - inclusive: tax already inside subtotal → don't add it again
+ *   - exclusive: tax sits outside subtotal → add it
+ *   - none:      tax should be 0; treated like inclusive (no addition)
+ */
+export function computeTotalCents(parts: {
+  subtotal_cents: number;
+  service_charge_cents: number;
+  tip_cents: number;
+  tax_amount_cents: number;
+  tax_mode: ExtractedExpense['tax_mode'];
+}): number {
+  const subtotal = BigInt(Math.trunc(parts.subtotal_cents));
+  const service = BigInt(Math.trunc(parts.service_charge_cents));
+  const tip = BigInt(Math.trunc(parts.tip_cents));
+  const tax = BigInt(Math.trunc(parts.tax_amount_cents));
+  const base = subtotal + service + tip;
+  const total = parts.tax_mode === 'exclusive' ? base + tax : base;
+  return Number(total);
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────
