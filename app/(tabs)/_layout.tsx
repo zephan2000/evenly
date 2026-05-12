@@ -18,13 +18,16 @@ export default function TabLayout() {
             tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
             headerShown: false,
             tabBarButton: HapticTab,
+            // Inline (non-absolute) tab bar: lets the screen layout reserve
+            // its 88px and prevents bottom CTAs (sticky save bars, modal
+            // footers) from being intercepted by the tab bar overlay. The
+            // previous absolute positioning meant every screen-bottom
+            // button — Save expense, Save splits, Done, Pick receipts —
+            // was un-tappable on web because the tab bar received the
+            // pointer events.
             tabBarStyle: {
               backgroundColor: '#FFFFFF',
               borderTopColor: '#E5E9EE',
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
               height: 88,
               paddingTop: 8,
               paddingBottom: 16,
@@ -63,6 +66,7 @@ export default function TabLayout() {
           */}
           <Tabs.Screen name="quick-capture" options={{ href: null }} />
           <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
+          <Tabs.Screen name="expenses/[id]/split" options={{ href: null }} />
           <Tabs.Screen name="expenses/new" options={{ href: null }} />
           <Tabs.Screen name="trips/[id]/members" options={{ href: null }} />
         </Tabs>
