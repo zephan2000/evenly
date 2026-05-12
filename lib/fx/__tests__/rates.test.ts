@@ -76,4 +76,25 @@ describe('fetchFxRate', () => {
       kind: 'transient',
     });
   });
+
+  it('falls back from dated 404 to latest, returning stale', async () => {
+    // Out-of-range dated request — e.g. a future-dated receipt or a date
+    // before frankfurter's data range. We should fall through to /latest
+    // and tag the result as stale so the UI can flag it.
+    const fetchImpl = makeFetch((url) => {
+      if (url.includes('/2099-04-29')) return { status: 404, body: { message: 'not found' } };
+      if (url.includes('/latest')) return { status: 200, body: { rates: { SGD: 1.35 } } };
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const result = await fetchFxRate('USD', 'SGD', '2099-04-29', { fetchImpl });
+    expect(result).toEqual({ rate: 1.35, status: 'stale' });
+  });
+
+  it('throws when both the dated request and the latest fallback 404', async () => {
+    const fetchImpl = makeFetch(() => ({ status: 404, body: { message: 'not found' } }));
+    await expect(fetchFxRate('XYZ', 'SGD', '2026-05-10', { fetchImpl })).rejects.toMatchObject({
+      name: 'FxRateError',
+      kind: 'unsupported_currency',
+    });
+  });
 });

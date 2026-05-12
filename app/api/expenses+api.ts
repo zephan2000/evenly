@@ -151,12 +151,24 @@ export async function POST(request: Request) {
     to: homeCurrency,
     date: expense.expense_date,
   });
-  const homeAmountMinor = convertMinorUnits({
-    amountMinor: BigInt(expense.total_cents),
-    fromCurrency: expense.currency,
-    toCurrency: homeCurrency,
-    rate: fx.rate,
-  });
+  // When the FX lookup falls back to stale (rate=1), DO NOT run
+  // convertMinorUnits — that path applies the decimal-shift between
+  // currencies, which for a 0-decimal currency like VND saving to a
+  // 2-decimal home like SGD inflates the home_amount by 100×. The
+  // honest fallback is to keep the original minor units; the UI shows
+  // an "FX unavailable" indicator off the fx_rate_status column. Same-
+  // currency rows also go down this path (rate=1, status=fresh), which
+  // is fine because original minor units already match home minor units.
+  const sameCurrency = expense.currency.trim().toUpperCase() === homeCurrency.trim().toUpperCase();
+  const homeAmountMinor =
+    sameCurrency || fx.status === 'stale'
+      ? BigInt(expense.total_cents)
+      : convertMinorUnits({
+          amountMinor: BigInt(expense.total_cents),
+          fromCurrency: expense.currency,
+          toCurrency: homeCurrency,
+          rate: fx.rate,
+        });
 
   const { data, error } = await client.rpc('save_expense_with_items', {
     p_trip_id: trip_id,

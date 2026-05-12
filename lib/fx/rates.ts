@@ -69,45 +69,97 @@ export async function fetchFxRate(
   }
 
   const fetchFn = opts.fetchImpl ?? fetch;
-  const path = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : 'latest';
-  const url = `${FRANKFURTER_BASE}/${path}?from=${encodeURIComponent(fromCode)}&to=${encodeURIComponent(toCode)}`;
+  const hasDate = !!date && /^\d{4}-\d{2}-\d{2}$/.test(date);
 
+  // Try the dated endpoint first when a date is provided. Frankfurter 404s
+  // when the date is outside its data range (e.g. future-dated receipts, or
+  // pre-1999); for that case we fall through to `latest` rather than giving
+  // up — a stale-by-a-few-days rate is much better for the user than no
+  // rate at all + the decimal-shift inflation that comes from rate=1
+  // fallback (see the convertMinorUnits trap in app/api/expenses+api.ts).
+  if (hasDate) {
+    const r = await tryFetch(fetchFn, date as string, fromCode, toCode);
+    if (r.kind === 'rate') return { rate: r.rate, status: 'fresh' };
+    // 404 on the dated request → fall through to latest. Any other error
+    // (transient, bad_payload, unsupported with a non-404 200 response)
+    // throws now since latest probably won't help and we want callers to
+    // log it.
+    if (r.kind !== 'date_out_of_range') throw r.error;
+  }
+
+  const r = await tryFetch(fetchFn, 'latest', fromCode, toCode);
+  if (r.kind === 'rate') {
+    // Tag as fresh if no date was requested; stale if we fell back from a
+    // dated request — UI can use this to show a tiny "rate-from-today"
+    // tooltip on backdated expenses.
+    return { rate: r.rate, status: hasDate ? 'stale' : 'fresh' };
+  }
+  throw r.error;
+}
+
+type TryFetchResult =
+  | { kind: 'rate'; rate: number }
+  | { kind: 'date_out_of_range'; error: FxRateError }
+  | { kind: 'error'; error: FxRateError };
+
+async function tryFetch(
+  fetchFn: typeof fetch,
+  path: string,
+  fromCode: string,
+  toCode: string,
+): Promise<TryFetchResult> {
+  const url = `${FRANKFURTER_BASE}/${path}?from=${encodeURIComponent(fromCode)}&to=${encodeURIComponent(toCode)}`;
   let resp: Response;
   try {
     resp = await fetchFn(url, { method: 'GET' });
   } catch (cause) {
-    throw new FxRateError('transient', `fx fetch network error: ${String(cause)}`);
+    return {
+      kind: 'error',
+      error: new FxRateError('transient', `fx fetch network error: ${String(cause)}`),
+    };
   }
 
   if (resp.status === 404) {
-    // Frankfurter returns 404 for unsupported currency pairs.
-    throw new FxRateError(
+    // Frankfurter returns 404 for both unsupported currency pairs AND for
+    // dates outside its data range. We can't easily tell apart from the
+    // response, so when we got here from a dated request we let the caller
+    // retry with latest; when we got here from `latest` itself, it's truly
+    // unsupported.
+    const error = new FxRateError(
       'unsupported_currency',
-      `frankfurter 404 for ${fromCode}->${toCode}`,
+      `frankfurter 404 for ${fromCode}->${toCode} (${path})`,
       404,
     );
+    return { kind: path === 'latest' ? 'error' : 'date_out_of_range', error };
   }
   if (!resp.ok) {
-    throw new FxRateError('transient', `frankfurter status ${resp.status}`, resp.status);
+    return {
+      kind: 'error',
+      error: new FxRateError('transient', `frankfurter status ${resp.status}`, resp.status),
+    };
   }
 
   let payload: unknown;
   try {
     payload = await resp.json();
   } catch (cause) {
-    throw new FxRateError('bad_payload', `frankfurter bad json: ${String(cause)}`);
+    return {
+      kind: 'error',
+      error: new FxRateError('bad_payload', `frankfurter bad json: ${String(cause)}`),
+    };
   }
 
   const rate = readRate(payload, toCode);
   if (rate === null) {
-    // Some unsupported codes return 200 with the requested currency missing
-    // from `rates` — treat that the same as a 404.
-    throw new FxRateError(
-      'unsupported_currency',
-      `frankfurter response missing ${toCode} rate for ${fromCode}`,
-    );
+    return {
+      kind: 'error',
+      error: new FxRateError(
+        'unsupported_currency',
+        `frankfurter response missing ${toCode} rate for ${fromCode}`,
+      ),
+    };
   }
-  return { rate, status: 'fresh' };
+  return { kind: 'rate', rate };
 }
 
 function readRate(payload: unknown, toCode: string): number | null {
