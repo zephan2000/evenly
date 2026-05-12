@@ -8,6 +8,106 @@ export type Database = {
   };
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string;
+          actor_member_id: string | null;
+          context: Json | null;
+          created_at: string;
+          diff: Json | null;
+          id: string;
+          target_id: string | null;
+          target_type: string;
+          trip_id: string;
+        };
+        Insert: {
+          action: string;
+          actor_member_id?: string | null;
+          context?: Json | null;
+          created_at?: string;
+          diff?: Json | null;
+          id?: string;
+          target_id?: string | null;
+          target_type: string;
+          trip_id: string;
+        };
+        Update: {
+          action?: string;
+          actor_member_id?: string | null;
+          context?: Json | null;
+          created_at?: string;
+          diff?: Json | null;
+          id?: string;
+          target_id?: string | null;
+          target_type?: string;
+          trip_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'audit_log_actor_member_id_fkey';
+            columns: ['actor_member_id'];
+            isOneToOne: false;
+            referencedRelation: 'trip_members';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'audit_log_trip_id_fkey';
+            columns: ['trip_id'];
+            isOneToOne: false;
+            referencedRelation: 'trips';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      expense_item_splits: {
+        Row: {
+          expense_item_id: string;
+          id: string;
+          share_amount: number;
+          share_rule: string;
+          share_set_id: string | null;
+          trip_member_id: string;
+        };
+        Insert: {
+          expense_item_id: string;
+          id?: string;
+          share_amount: number;
+          share_rule: string;
+          share_set_id?: string | null;
+          trip_member_id: string;
+        };
+        Update: {
+          expense_item_id?: string;
+          id?: string;
+          share_amount?: number;
+          share_rule?: string;
+          share_set_id?: string | null;
+          trip_member_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'expense_item_splits_expense_item_id_fkey';
+            columns: ['expense_item_id'];
+            isOneToOne: false;
+            referencedRelation: 'expense_items';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'expense_item_splits_share_set_id_fkey';
+            columns: ['share_set_id'];
+            isOneToOne: false;
+            referencedRelation: 'share_sets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'expense_item_splits_trip_member_id_fkey';
+            columns: ['trip_member_id'];
+            isOneToOne: false;
+            referencedRelation: 'trip_members';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       expense_items: {
         Row: {
           amount: number;
@@ -62,6 +162,7 @@ export type Database = {
           original_amount: number;
           original_currency: string;
           payer_member_id: string;
+          quick_capture_batch_id: string | null;
           receipt_image_path: string | null;
           service_charge: number;
           subtotal: number;
@@ -87,6 +188,7 @@ export type Database = {
           original_amount: number;
           original_currency: string;
           payer_member_id: string;
+          quick_capture_batch_id?: string | null;
           receipt_image_path?: string | null;
           service_charge?: number;
           subtotal?: number;
@@ -112,6 +214,7 @@ export type Database = {
           original_amount?: number;
           original_currency?: string;
           payer_member_id?: string;
+          quick_capture_batch_id?: string | null;
           receipt_image_path?: string | null;
           service_charge?: number;
           subtotal?: number;
@@ -138,7 +241,121 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
+            foreignKeyName: 'expenses_quick_capture_batch_id_fkey';
+            columns: ['quick_capture_batch_id'];
+            isOneToOne: false;
+            referencedRelation: 'quick_capture_batches';
+            referencedColumns: ['id'];
+          },
+          {
             foreignKeyName: 'expenses_trip_id_fkey';
+            columns: ['trip_id'];
+            isOneToOne: false;
+            referencedRelation: 'trips';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      quick_capture_batches: {
+        Row: {
+          confirmed_at: string | null;
+          created_at: string;
+          discarded_at: string | null;
+          id: string;
+          image_count: number;
+          owner_user_id: string;
+        };
+        Insert: {
+          confirmed_at?: string | null;
+          created_at?: string;
+          discarded_at?: string | null;
+          id?: string;
+          image_count: number;
+          owner_user_id: string;
+        };
+        Update: {
+          confirmed_at?: string | null;
+          created_at?: string;
+          discarded_at?: string | null;
+          id?: string;
+          image_count?: number;
+          owner_user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'quick_capture_batches_owner_user_id_fkey';
+            columns: ['owner_user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      share_set_members: {
+        Row: {
+          share_set_id: string;
+          trip_member_id: string;
+        };
+        Insert: {
+          share_set_id: string;
+          trip_member_id: string;
+        };
+        Update: {
+          share_set_id?: string;
+          trip_member_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'share_set_members_share_set_id_fkey';
+            columns: ['share_set_id'];
+            isOneToOne: false;
+            referencedRelation: 'share_sets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'share_set_members_trip_member_id_fkey';
+            columns: ['trip_member_id'];
+            isOneToOne: false;
+            referencedRelation: 'trip_members';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      share_sets: {
+        Row: {
+          created_at: string;
+          created_from_expense_id: string | null;
+          id: string;
+          last_used_at: string;
+          name: string;
+          trip_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_from_expense_id?: string | null;
+          id?: string;
+          last_used_at?: string;
+          name: string;
+          trip_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_from_expense_id?: string | null;
+          id?: string;
+          last_used_at?: string;
+          name?: string;
+          trip_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'share_sets_created_from_expense_id_fkey';
+            columns: ['created_from_expense_id'];
+            isOneToOne: false;
+            referencedRelation: 'expenses';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'share_sets_trip_id_fkey';
             columns: ['trip_id'];
             isOneToOne: false;
             referencedRelation: 'trips';
@@ -280,11 +497,22 @@ export type Database = {
     };
     Functions: {
       current_user_id: { Args: never; Returns: string };
+      save_expense_splits: {
+        Args: {
+          p_expense_id: string;
+          p_individual_panels: Json;
+          p_share_groups: Json;
+        };
+        Returns: Json;
+      };
       save_expense_with_items: {
         Args: {
           p_category: string;
           p_created_by_member_id: string;
           p_expense_date: string;
+          p_fx_rate: number;
+          p_fx_rate_status: string;
+          p_home_amount: number;
           p_items: Json;
           p_merchant: string;
           p_notes: string;

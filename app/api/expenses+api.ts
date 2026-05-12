@@ -13,6 +13,8 @@ import { z } from 'zod';
 import { PersistedExpenseSchema } from '@/lib/ai/schema';
 import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
 import { createUserClient } from '@/lib/db/server';
+import { getCurrencyDecimals } from '@/lib/fx/currency';
+import { FxRateError, fetchFxRate, type FxRateStatus } from '@/lib/fx/rates';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIST_LIMIT = 50;
@@ -124,6 +126,38 @@ export async function POST(request: Request) {
 
   const client = createUserClient(auth.jwt);
 
+  // Trust only the server for home_currency. The POST body intentionally
+  // omits it; RLS gates this select to trip members.
+  const { data: tripRow, error: tripErr } = await client
+    .from('trips')
+    .select('home_currency')
+    .eq('id', trip_id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (tripErr) {
+    return Response.json(
+      { ok: false, error: 'trip_lookup_failed', detail: tripErr.message },
+      { status: 500 },
+    );
+  }
+  if (!tripRow?.home_currency) {
+    return Response.json({ ok: false, error: 'trip_not_found' }, { status: 404 });
+  }
+
+  const homeCurrency = tripRow.home_currency;
+  const fx = await resolveFxSnapshot({
+    from: expense.currency,
+    to: homeCurrency,
+    date: expense.expense_date,
+  });
+  const homeAmountMinor = convertMinorUnits({
+    amountMinor: BigInt(expense.total_cents),
+    fromCurrency: expense.currency,
+    toCurrency: homeCurrency,
+    rate: fx.rate,
+  });
+
   const { data, error } = await client.rpc('save_expense_with_items', {
     p_trip_id: trip_id,
     p_payer_member_id: payer_member_id,
@@ -152,6 +186,13 @@ export async function POST(request: Request) {
       amount: item.amount_cents,
       sort_order: idx,
     })),
+    p_fx_rate: fx.rate,
+    p_fx_rate_status: fx.status,
+    // home_amount is bigint in Postgres; the generated Args type widens to
+    // `number`. Cast at the boundary so PostgREST sees a JSON number string
+    // it can parse into bigint without overflowing JS Number (BigInt → string
+    // would also work but `number` matches the generated signature).
+    p_home_amount: Number(homeAmountMinor),
   });
 
   if (error) {
@@ -162,4 +203,88 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ ok: true, expense_id: data as unknown as string }, { status: 200 });
+}
+
+// ─── FX snapshot helpers ─────────────────────────────────────────────────
+// ADR 0007: snapshot the rate at expense save time. Frankfurter is the
+// source. On API failure (network, 5xx) or unsupported currency, downgrade
+// to { rate: 1, status: 'stale' } so the save still succeeds and the issue
+// is fixable later via a refresh job (post-MVP). We log at DEBUG-equivalent
+// (console.warn here; production scrubbing is per ADR 0007 / data-model.md).
+
+async function resolveFxSnapshot(args: {
+  from: string;
+  to: string;
+  date: string;
+}): Promise<{ rate: number; status: FxRateStatus }> {
+  try {
+    return await fetchFxRate(args.from, args.to, args.date);
+  } catch (err) {
+    if (err instanceof FxRateError) {
+      // Do not log amounts or merchant — only the rate-resolution context.
+      console.warn(
+        `[fx] downgraded ${args.from}->${args.to} to stale: ${err.kind}${err.status ? ` (${err.status})` : ''}`,
+      );
+      return { rate: 1, status: 'stale' };
+    }
+    console.warn(`[fx] downgraded ${args.from}->${args.to} to stale: unknown error`);
+    return { rate: 1, status: 'stale' };
+  }
+}
+
+/**
+ * Convert minor units from one currency to another using a snapshot rate.
+ *
+ * The math: rate is original→home, expressed in major units (e.g. 1 VND =
+ * 0.0000537 SGD). Minor units differ between currencies (VND has 0
+ * decimals, SGD has 2). The formula is:
+ *
+ *   home_minor = round( original_minor / 10^from_dec * rate * 10^to_dec )
+ *
+ * Worked example for the docstring (and for the verification step in the
+ * brief): VND 562,000 → SGD at rate 0.0000537.
+ *   original_minor = 562000 (VND has 0 decimals, so minor == major)
+ *   home_minor = round(562000 / 1 * 0.0000537 * 100)
+ *              = round(3017.94)
+ *              = 3018  → SGD 30.18.
+ *
+ * We do the rate × decimals-scale arithmetic in `number` (the rate is
+ * inherently a Number from JSON), then convert to BigInt with explicit
+ * round-half-up — never letting `Number` represent the final integer if it
+ * exceeds 2^53. Round-half-up matches POSIX `printf %.0f` and what a
+ * non-finance user expects; banker's rounding would be silently surprising
+ * for a 0.5-cent edge case.
+ */
+function convertMinorUnits(args: {
+  amountMinor: bigint;
+  fromCurrency: string;
+  toCurrency: string;
+  rate: number;
+}): bigint {
+  const { amountMinor, fromCurrency, toCurrency, rate } = args;
+  if (fromCurrency.trim().toUpperCase() === toCurrency.trim().toUpperCase()) {
+    return amountMinor;
+  }
+  const fromDec = getCurrencyDecimals(fromCurrency);
+  const toDec = getCurrencyDecimals(toCurrency);
+
+  // Step 1: original_minor → major (Number is fine; amounts here are small).
+  const amountMajor = Number(amountMinor) / 10 ** fromDec;
+  // Step 2: major × rate → home major.
+  const homeMajor = amountMajor * rate;
+  // Step 3: home major → home minor as a float, then round half-up to BigInt.
+  const homeMinorFloat = homeMajor * 10 ** toDec;
+  return roundHalfUpToBigInt(homeMinorFloat);
+}
+
+function roundHalfUpToBigInt(n: number): bigint {
+  if (!Number.isFinite(n)) return 0n;
+  // Math.round in JS rounds half-AWAY-from-zero for positives but half-UP
+  // for negatives in a way that doesn't match "+1 if frac >= 0.5" near zero.
+  // Use Math.floor(x + 0.5) for the positive branch and -floor(|x| + 0.5)
+  // for the negative branch so behavior is symmetric.
+  const sign = n < 0 ? -1n : 1n;
+  const abs = Math.abs(n);
+  const rounded = Math.floor(abs + 0.5);
+  return sign * BigInt(rounded);
 }
