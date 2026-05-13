@@ -55,20 +55,13 @@ export default function TabLayout() {
             }}
           />
           {/*
-            Hide nested route trees from the tab bar. Expo Router auto-
-            registers every immediate child of (tabs) as a tab; passing
-            href: null keeps the route reachable via router.push but
-            removes it from the tab strip. Without this, dynamic routes
-            like expenses/[id] render a tab that navigates to
-            /expenses/undefined (the literal string), and inner stacks
-            like quick-capture leak as top-level tabs with the wrong
-            icon and label.
+            Non-tab routes now live at app/expenses/, app/quick-capture/,
+            app/trips/ — they push onto the root Stack instead of mounting
+            as hidden siblings inside (tabs). That fixes the DOM-accumulation
+            bug where every navigation kept the previous screen alive in
+            the tree (six full screen subtrees stacked after Home → Members
+            → Add expense → C6 → Split → Settings).
           */}
-          <Tabs.Screen name="quick-capture" options={{ href: null }} />
-          <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
-          <Tabs.Screen name="expenses/[id]/split" options={{ href: null }} />
-          <Tabs.Screen name="expenses/new" options={{ href: null }} />
-          <Tabs.Screen name="trips/[id]/members" options={{ href: null }} />
         </Tabs>
       </SignedIn>
       <SignedOut>

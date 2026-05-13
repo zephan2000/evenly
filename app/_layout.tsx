@@ -79,6 +79,15 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="sign-in" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                {/* Task-oriented screens live at the root Stack so they
+                    push on top of the tab bar (which goes away while
+                    you're working). Each owns its own header via the
+                    Stack.Screen options inside its file. */}
+                <Stack.Screen name="quick-capture" options={{ headerShown: false }} />
+                <Stack.Screen name="expenses/[id]" options={{ headerShown: false }} />
+                <Stack.Screen name="expenses/[id]/split" options={{ headerShown: false }} />
+                <Stack.Screen name="expenses/new" options={{ headerShown: false }} />
+                <Stack.Screen name="trips/[id]/members" options={{ headerShown: false }} />
               </Stack>
               <StatusBar style="auto" />
             </ThemeProvider>

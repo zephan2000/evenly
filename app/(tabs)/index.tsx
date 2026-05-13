@@ -371,9 +371,7 @@ export default function HomeScreen() {
                   label={heroPrimaryLabel}
                   size="lg"
                   leading={heroPrimaryLeading}
-                  onPress={
-                    hasTrips ? () => router.push('/(tabs)/quick-capture') : openCreateTripSheet
-                  }
+                  onPress={hasTrips ? () => router.push('/quick-capture') : openCreateTripSheet}
                 />
                 {hasTrips ? (
                   <Button
