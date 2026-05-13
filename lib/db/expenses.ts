@@ -106,6 +106,35 @@ export function sumHomeAmount(expenses: readonly ExpenseRecord[]): bigint {
   return total;
 }
 
+/**
+ * Sum of `home_amount` for rows where we trust the conversion. Excludes
+ * rows tagged `fx_rate_status === 'stale'` — those are saves where the
+ * FX provider didn't cover the original currency or the date range, and
+ * we wrote `home_amount = original_amount` as an honest fallback (see
+ * app/api/expenses+api.ts). Summing them into the hero would silently
+ * mislabel foreign-currency minor units as the home currency (e.g. VND
+ * 562,000 ↦ "SGD 5,620.00"). Pre-migration rows (`fx_rate_status === null`)
+ * are included — they were mirrored pre-FX-wiring but in practice almost
+ * all of those are same-currency, which makes the mirror correct.
+ */
+export function sumHomeAmountConfident(expenses: readonly ExpenseRecord[]): bigint {
+  let total = 0n;
+  for (const e of expenses) {
+    if (e.fx_rate_status === 'stale') continue;
+    total += BigInt(e.home_amount);
+  }
+  return total;
+}
+
+/**
+ * How many rows we couldn't FX-convert. The home hero shows a small
+ * "(N not converted)" hint so the displayed total doesn't quietly under-
+ * report the trip.
+ */
+export function countStaleFx(expenses: readonly ExpenseRecord[]): number {
+  return expenses.filter((e) => e.fx_rate_status === 'stale').length;
+}
+
 export async function getExpense(
   getToken: GetToken,
   id: string,

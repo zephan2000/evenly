@@ -28,10 +28,11 @@ import {
 import { BrandAssets } from '@/constants/brand-assets';
 import { Brand, type CategoryKey, Neutral, Radius, Rhythm, Space } from '@/constants/theme';
 import {
+  countStaleFx,
   type ExpenseRecord,
   formatExpenseTotal,
   listExpenses,
-  sumHomeAmount,
+  sumHomeAmountConfident,
 } from '@/lib/db/expenses';
 import { createTripWithMembers, listTrips, type TripRecord } from '@/lib/db/trips';
 import { formatMinor } from '@/lib/fx/currency';
@@ -282,10 +283,20 @@ export default function HomeScreen() {
   const heroAmount = useMemo(() => {
     if (!selectedTrip || expensesState.kind !== 'ready' || sortedExpenses.length === 0) return '—';
     return `${selectedTrip.home_currency} ${formatMinor(
-      sumHomeAmount(sortedExpenses),
+      sumHomeAmountConfident(sortedExpenses),
       selectedTrip.home_currency,
     )}`;
   }, [expensesState.kind, selectedTrip, sortedExpenses]);
+
+  // Count of rows whose FX rate we couldn't resolve at save time (frankfurter
+  // doesn't cover the currency, or the receipt's date was outside its range).
+  // We exclude them from the hero sum to avoid mislabeling foreign minor
+  // units as the home currency; the badge tells the user *why* the total
+  // doesn't match the receipts they remember adding.
+  const staleFxCount = useMemo(
+    () => (expensesState.kind === 'ready' ? countStaleFx(expensesState.expenses) : 0),
+    [expensesState],
+  );
 
   const heroMetaLeft = tripsLoading
     ? 'LOADING'
@@ -341,6 +352,13 @@ export default function HomeScreen() {
                         {heroAmount}
                       </Text>
                     )}
+                    {staleFxCount > 0 ? (
+                      <Text variant="caption" style={styles.heroFxNote}>
+                        {staleFxCount === 1
+                          ? '+ 1 receipt awaiting FX'
+                          : `+ ${staleFxCount} receipts awaiting FX`}
+                      </Text>
+                    ) : null}
                   </>
                 ) : (
                   <Text variant="subtitle" style={styles.noTripsCopy}>
@@ -642,6 +660,10 @@ const styles = StyleSheet.create({
   heroAmount: {
     fontSize: 34,
     lineHeight: 38,
+  },
+  heroFxNote: {
+    color: 'rgba(255,255,255,0.72)',
+    marginTop: 4,
   },
   noTripsCopy: {
     maxWidth: 280,
