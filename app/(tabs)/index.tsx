@@ -27,6 +27,7 @@ import {
 } from '@/components/ui';
 import { BrandAssets } from '@/constants/brand-assets';
 import { Brand, type CategoryKey, Neutral, Radius, Rhythm, Space } from '@/constants/theme';
+import { getTripBalances, type TripBalances } from '@/lib/db/balances';
 import {
   countStaleFx,
   type ExpenseRecord,
@@ -132,6 +133,7 @@ export default function HomeScreen() {
   const [tripsError, setTripsError] = useState<string | null>(null);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [expensesState, setExpensesState] = useState<ExpensesState>({ kind: 'idle' });
+  const [balances, setBalances] = useState<TripBalances | null>(null);
 
   // Refs so loadTrips can read the latest selectedTripId in its error
   // fallback without listing it in its useCallback deps — otherwise every
@@ -161,17 +163,31 @@ export default function HomeScreen() {
   const loadExpensesForTrip = useCallback(async (tripId: string | null) => {
     if (!tripId) {
       setExpensesState({ kind: 'ready', expenses: [] });
+      setBalances(null);
       return;
     }
     setExpensesState({ kind: 'loading' });
     try {
-      const expenses = await listExpenses(() => getTokenRef.current(), tripId);
+      // Expenses + balances in parallel — both come off the same trip and
+      // the user sees the Settle softly card alongside Recent expenses.
+      const [expenses, nextBalances] = await Promise.all([
+        listExpenses(() => getTokenRef.current(), tripId),
+        getTripBalances(() => getTokenRef.current(), tripId).catch((err) => {
+          // Soft-fail balances. The hero + recent expenses must keep
+          // rendering even if the splits aggregator is unavailable. The
+          // card just falls back to zeros.
+          console.warn('[home] balances fetch failed:', err);
+          return null;
+        }),
+      ]);
       setExpensesState({ kind: 'ready', expenses });
+      setBalances(nextBalances);
     } catch (e) {
       setExpensesState({
         kind: 'error',
         message: e instanceof Error ? e.message : 'Failed to load expenses',
       });
+      setBalances(null);
     }
   }, []);
 
@@ -403,7 +419,19 @@ export default function HomeScreen() {
 
       {hasTrips ? (
         <>
-          <SectionHeader title="Settle softly" trailing={<Chip label="0 people owed" selected />} />
+          <SectionHeader
+            title="Settle softly"
+            trailing={
+              <Chip
+                label={
+                  balances && balances.peopleCount > 0
+                    ? `${balances.peopleCount} ${balances.peopleCount === 1 ? 'person' : 'people'} owed`
+                    : '0 people owed'
+                }
+                selected
+              />
+            }
+          />
 
           <Card raised style={styles.summaryCard}>
             <View style={styles.summaryTop}>
@@ -412,15 +440,22 @@ export default function HomeScreen() {
                   You paid
                 </Text>
                 <Text variant="title" tabularNums>
-                  $0.00
+                  {balances
+                    ? `${balances.homeCurrency} ${formatMinor(balances.youPaid, balances.homeCurrency)}`
+                    : '—'}
                 </Text>
               </View>
               <View style={styles.summaryMetric}>
                 <Text variant="caption" color="textSecondary">
-                  You’re owed
+                  {balances && balances.netOwedToYou < 0n ? 'You owe' : 'You’re owed'}
                 </Text>
                 <Text variant="title" tabularNums style={styles.owedValue}>
-                  $0.00
+                  {balances
+                    ? `${balances.homeCurrency} ${formatMinor(
+                        balances.netOwedToYou < 0n ? -balances.netOwedToYou : balances.netOwedToYou,
+                        balances.homeCurrency,
+                      )}`
+                    : '—'}
                 </Text>
               </View>
             </View>
