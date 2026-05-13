@@ -248,13 +248,18 @@ export function reducer(state: SplitDraft, action: Action): SplitDraft {
       const cleanedPanels = state.panels.filter((p) => p.itemId !== itemId);
 
       if (groupId === null) {
-        // Make individual: create a panel if not already present.
+        // Make individual: create a panel + jump the wizard cursor to its
+        // panel step. Without the cursor-jump the user gets stranded on
+        // step 1: the new panel step renders as "future", and `decideRevisit`
+        // forbids tapping a future step. Auto-jump here gives the obvious
+        // "now pick who's on this item" follow-through.
         const panel = makeDefaultPanel(item);
         return {
           ...state,
           shareGroups: cleanedGroups,
           individualItemIds: [...cleanedIndividual, itemId],
           panels: [...cleanedPanels, panel],
+          currentStepId: panelStepId(itemId),
         };
       }
 
@@ -264,11 +269,17 @@ export function reducer(state: SplitDraft, action: Action): SplitDraft {
         ...cleanedGroups[idx],
         itemIds: [...cleanedGroups[idx].itemIds, itemId],
       };
+      // If returning the active panel's item to a group, the panel's step
+      // is about to disappear from wizardSteps — drop back to Share groups
+      // so the user isn't pointing at a dead step id.
+      const nextStepId =
+        state.currentStepId === panelStepId(itemId) ? SHARE_GROUPS_STEP_ID : state.currentStepId;
       return {
         ...state,
         shareGroups: cleanedGroups,
         individualItemIds: cleanedIndividual,
         panels: cleanedPanels,
+        currentStepId: nextStepId,
       };
     }
 
