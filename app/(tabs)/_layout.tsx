@@ -61,7 +61,17 @@ export default function TabLayout() {
             bug where every navigation kept the previous screen alive in
             the tree (six full screen subtrees stacked after Home → Members
             → Add expense → C6 → Split → Settings).
+
+            But expo-router's <Tabs> still auto-discovers them as tab-bar
+            entries unless we explicitly tell it not to. href: null keeps
+            the tab strip clean while leaving the routes reachable via
+            router.push from anywhere.
           */}
+          <Tabs.Screen name="quick-capture" options={{ href: null }} />
+          <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
+          <Tabs.Screen name="expenses/[id]/split" options={{ href: null }} />
+          <Tabs.Screen name="expenses/new" options={{ href: null }} />
+          <Tabs.Screen name="trips/[id]/members" options={{ href: null }} />
         </Tabs>
       </SignedIn>
       <SignedOut>
