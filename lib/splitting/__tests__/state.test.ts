@@ -218,6 +218,31 @@ describe('MOVE_ITEM_TO_GROUP', () => {
     const after = reducer(before, { type: 'MOVE_ITEM_TO_GROUP', itemId: 'ghost', groupId: null });
     expect(after).toBe(before);
   });
+
+  it('jumps currentStepId to the new panel when making an item individual', () => {
+    // Without this jump the user gets stranded on Share groups: the new
+    // panel step is "future" and decideRevisit blocks tapping it.
+    const state = reducer(init(), {
+      type: 'MOVE_ITEM_TO_GROUP',
+      itemId: 'i3',
+      groupId: null,
+    });
+    expect(state.currentStepId).toBe('panel:i3');
+  });
+
+  it('falls back to share_groups when returning the active panel item to a group', () => {
+    // The panel step disappears from wizardSteps when its item leaves the
+    // individual bucket — leaving currentStepId pointing at it would break
+    // findStepIndex on the next render.
+    let state = reducer(init(), { type: 'MOVE_ITEM_TO_GROUP', itemId: 'i3', groupId: null });
+    expect(state.currentStepId).toBe('panel:i3');
+    state = reducer(state, {
+      type: 'MOVE_ITEM_TO_GROUP',
+      itemId: 'i3',
+      groupId: DEFAULT_GROUP_ID,
+    });
+    expect(state.currentStepId).toBe('share_groups');
+  });
 });
 
 // ─── Panel actions ───────────────────────────────────────────────────────
