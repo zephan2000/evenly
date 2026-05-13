@@ -30,10 +30,12 @@ import { BottomSheet, type BottomSheetHandle } from '@/components/ui/bottom-shee
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ListRow } from '@/components/ui/list-row';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { Brand, Neutral, Rhythm, Semantic, Space } from '@/constants/theme';
 import type { ExtractedExpense } from '@/lib/ai/schema';
+import { listTripMembers, type TripMember } from '@/lib/db/trip-members';
 import { createTripWithMembers, listTrips, type TripRecord } from '@/lib/db/trips';
 import { useQuickCaptureDispatch, useQuickCaptureState } from '@/lib/quick-capture/context';
 import { createRealDeps } from '@/lib/quick-capture/deps';
@@ -118,12 +120,18 @@ export default function QuickCaptureTrayScreen() {
     emptyCreateTripForm(),
   );
   const [creatingTrip, setCreatingTrip] = useState(false);
+  // Members for the active batch trip + the chosen payer for this batch.
+  // Per-receipt payer override is post-MVP — the whole batch saves with one
+  // payer for now (the comment on createRealDeps below confirms this design).
+  const [batchMembers, setBatchMembers] = useState<TripMember[]>([]);
+  const [batchPayerId, setBatchPayerId] = useState<string | null>(null);
 
   const tripPickerRef = useRef<BottomSheetHandle>(null);
   const saveConfirmRef = useRef<BottomSheetHandle>(null);
   const disablePerReceiptConfirmRef = useRef<BottomSheetHandle>(null);
   const saveAllConfirmRef = useRef<BottomSheetHandle>(null);
   const createTripSheetRef = useRef<BottomSheetHandle>(null);
+  const payerPickerRef = useRef<BottomSheetHandle>(null);
 
   // One-shot guard so route params don't re-init on every render.
   const initFromParamsRef = useRef<string | null>(null);
@@ -204,6 +212,34 @@ export default function QuickCaptureTrayScreen() {
     }
   }, [state.defaultTripId]);
 
+  // Fetch members + reset the batch payer whenever the batch's trip changes.
+  // Default the payer to the owner; user can override via the header chip.
+  useEffect(() => {
+    const tripId = state.defaultTripId;
+    if (!tripId || tripId.startsWith('demo-')) {
+      setBatchMembers([]);
+      setBatchPayerId(null);
+      return;
+    }
+    const trip = trips.find((t) => t.id === tripId);
+    if (!trip) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const members = await listTripMembers(() => getTokenRef.current(), tripId);
+        if (cancelled) return;
+        setBatchMembers(members);
+        setBatchPayerId(trip.owner_member_id);
+      } catch {
+        // Best-effort. If the fetch fails, the picker stays empty and the
+        // owner-id fallback in createRealDeps still produces a valid save.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.defaultTripId, trips]);
+
   const visibleDrafts = useMemo(
     () => state.drafts.filter((d) => d.status !== 'discarded'),
     [state.drafts],
@@ -218,25 +254,27 @@ export default function QuickCaptureTrayScreen() {
   const isRealBatch = visibleDrafts.length > 0 && !isDemoDraft(visibleDrafts[0]);
 
   // Real orchestrator deps. Created lazily — null until we have a signed-in
-  // session, a fetched trip, and a real (non-demo) batch. saveContext uses the
-  // owner's trip_member id for both payer and creator: the current user paid
-  // and entered the receipt themselves. Per-card payer override is post-MVP.
+  // session, a fetched trip, and a real (non-demo) batch. saveContext uses
+  // the user-chosen batch payer (default = owner). createdBy stays the
+  // owner since that's literally who entered the receipt; payer is what
+  // gets split-attributed. Per-receipt payer override is still post-MVP.
   const realDeps = useMemo(() => {
     if (!isRealBatch) return null;
     if (!isSignedIn) return null;
     if (!state.defaultTripId) return null;
     const tripForBatch = trips.find((t) => t.id === state.defaultTripId);
     if (!tripForBatch) return null;
+    const payerId = batchPayerId ?? tripForBatch.owner_member_id;
     return createRealDeps({
       getToken: () => getTokenRef.current(),
       uploadTripId: tripForBatch.id,
       saveContext: {
         tripId: tripForBatch.id,
-        payerMemberId: tripForBatch.owner_member_id,
+        payerMemberId: payerId,
         createdByMemberId: tripForBatch.owner_member_id,
       },
     });
-  }, [isRealBatch, isSignedIn, state.defaultTripId, trips]);
+  }, [isRealBatch, isSignedIn, state.defaultTripId, trips, batchPayerId]);
 
   // ─── Initialize batch from route params (real picker landing) ──────────
   useEffect(() => {
@@ -695,6 +733,14 @@ export default function QuickCaptureTrayScreen() {
               leading={<Ionicons name="airplane-outline" size={14} color={Neutral.textSecondary} />}
               accessibilityLabel={`Trip assignment: ${headerChipText.label}`}
             />
+            {batchMembers.length > 0 ? (
+              <Chip
+                label={`Paid by ${batchMembers.find((m) => m.id === batchPayerId)?.display_name ?? '—'}`}
+                onPress={() => payerPickerRef.current?.present()}
+                leading={<Ionicons name="person-outline" size={14} color={Neutral.textSecondary} />}
+                accessibilityLabel="Change who paid"
+              />
+            ) : null}
             {headerChipText.subtitle ? (
               <Text variant="caption" color="textSecondary">
                 {headerChipText.subtitle}
@@ -840,6 +886,39 @@ export default function QuickCaptureTrayScreen() {
 
       <BottomSheet ref={saveConfirmRef} snapPoints={['25%']}>
         <Text variant="body">…</Text>
+      </BottomSheet>
+
+      {/* Batch-level "Paid by" picker. One payer for the whole batch (§5.7;
+          per-receipt override is post-MVP). Defaults to the trip owner. */}
+      <BottomSheet ref={payerPickerRef} title="Who paid?" snapPoints={['55%']}>
+        <Text variant="body" color="textSecondary">
+          Whoever fronted the bill. Splitting attributes reimbursements to them.
+        </Text>
+        <View style={styles.payerList}>
+          {batchMembers.map((m, idx) => {
+            const selected = m.id === batchPayerId;
+            return (
+              <ListRow
+                key={m.id}
+                title={m.display_name}
+                subtitle={m.user_id ? 'Owner' : 'Guest'}
+                onPress={() => {
+                  setBatchPayerId(m.id);
+                  payerPickerRef.current?.dismiss();
+                }}
+                separator={idx < batchMembers.length - 1}
+                accessibilityLabel={`${m.display_name}${selected ? ', selected' : ''}`}
+                trailing={
+                  selected ? (
+                    <Text variant="body" color="brandInteractive">
+                      Selected
+                    </Text>
+                  ) : null
+                }
+              />
+            );
+          })}
+        </View>
       </BottomSheet>
     </View>
   );
@@ -1018,6 +1097,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: Space[8],
+    marginTop: Space[12],
+  },
+  payerList: {
+    borderWidth: 1,
+    borderColor: Neutral.borderSubtle,
+    borderRadius: 12,
+    overflow: 'hidden',
     marginTop: Space[12],
   },
 });

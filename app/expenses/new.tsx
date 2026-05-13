@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, StyleSheet, View } from 'react-native';
 
 import { ExpenseEditForm } from '@/components/expense/expense-edit-form';
+import { PayerPicker } from '@/components/expense/payer-picker';
 import { CurrencyPickerSheet } from '@/components/quick-capture/currency-picker-sheet';
 import { Banner } from '@/components/ui/banner';
 import { type BottomSheetHandle } from '@/components/ui/bottom-sheet';
@@ -23,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Neutral, Space } from '@/constants/theme';
 import { type ExtractedExpense, type PersistedExpense } from '@/lib/ai/schema';
 import { saveManualExpense } from '@/lib/db/expenses';
+import { listTripMembers, type TripMember } from '@/lib/db/trip-members';
 import { listTrips, type TripRecord } from '@/lib/db/trips';
 import { getCurrentTripId, setCurrentTripId } from '@/lib/storage/current-trip';
 
@@ -56,7 +58,7 @@ function emptyExpense(currency: string): ExtractedExpense {
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'no_trips' }
-  | { kind: 'ready'; trip: TripRecord }
+  | { kind: 'ready'; trip: TripRecord; members: TripMember[] }
   | { kind: 'error'; message: string };
 
 export default function ManualExpenseEntryScreen() {
@@ -76,6 +78,7 @@ export default function ManualExpenseEntryScreen() {
 
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [form, setForm] = useState<ExtractedExpense | null>(null);
+  const [selectedPayerId, setSelectedPayerId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const currencyPickerRef = useRef<BottomSheetHandle>(null);
@@ -96,8 +99,15 @@ export default function ManualExpenseEntryScreen() {
           return;
         }
         const picked = trips.find((t) => t.id === storedId) ?? trips[0];
-        setLoad({ kind: 'ready', trip: picked });
+        // Fetch trip members so the payer picker has something to render.
+        // We do this AFTER trip resolution so the request is scoped to the
+        // visible trip; switching trips on home is rare enough that we
+        // don't pre-warm.
+        const members = await listTripMembers(() => getTokenRef.current(), picked.id);
+        if (cancelled) return;
+        setLoad({ kind: 'ready', trip: picked, members });
         setForm(emptyExpense(picked.home_currency));
+        setSelectedPayerId(picked.owner_member_id);
       } catch (e) {
         if (cancelled) return;
         setLoad({
@@ -128,7 +138,7 @@ export default function ManualExpenseEntryScreen() {
 
       const expenseId = await saveManualExpense(() => getTokenRef.current(), {
         tripId: load.trip.id,
-        payerMemberId: load.trip.owner_member_id,
+        payerMemberId: selectedPayerId ?? load.trip.owner_member_id,
         createdByMemberId: load.trip.owner_member_id,
         expense,
       });
@@ -140,7 +150,7 @@ export default function ManualExpenseEntryScreen() {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Unknown error');
       setSaving(false);
     }
-  }, [load, form, saving, router]);
+  }, [load, form, saving, selectedPayerId, router]);
 
   if (load.kind === 'loading') {
     return (
@@ -199,6 +209,14 @@ export default function ManualExpenseEntryScreen() {
         onPrimaryAction={handleSave}
         primaryActionPending={saving}
         onChangeCurrency={() => currencyPickerRef.current?.present()}
+        payerSection={
+          <PayerPicker
+            members={load.members}
+            selectedMemberId={selectedPayerId}
+            onChange={setSelectedPayerId}
+            disabled={saving}
+          />
+        }
       />
       <CurrencyPickerSheet
         ref={currencyPickerRef}

@@ -52,6 +52,9 @@ export type ExpenseEditFormProps = {
   statusRow?: React.ReactNode;
   /** Optional slot rendered between status row and form (banners). */
   topBanner?: React.ReactNode;
+  /** Optional slot rendered between the Receipt and Items sections.
+   *  Manual entry + QC use this for the "Paid by" picker. */
+  payerSection?: React.ReactNode;
 
   /** Currency picker callback. If omitted, currency chip is read-only. */
   onChangeCurrency?: () => void;
@@ -89,6 +92,7 @@ export function ExpenseEditForm({
   primaryActionDisabled = false,
   statusRow,
   topBanner,
+  payerSection,
   onChangeCurrency,
   onPressReceipt,
 }: ExpenseEditFormProps) {
@@ -228,6 +232,8 @@ export function ExpenseEditForm({
             </View>
           </View>
         </Section>
+
+        {payerSection}
 
         {/* ─── Items section ─── */}
         <Section title="Items">
