@@ -79,15 +79,15 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="sign-in" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-                {/* Task-oriented screens live at the root Stack so they
-                    push on top of the tab bar (which goes away while
-                    you're working). Each owns its own header via the
-                    Stack.Screen options inside its file. */}
-                <Stack.Screen name="quick-capture" options={{ headerShown: false }} />
-                <Stack.Screen name="expenses/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="expenses/[id]/split" options={{ headerShown: false }} />
-                <Stack.Screen name="expenses/new" options={{ headerShown: false }} />
-                <Stack.Screen name="trips/[id]/members" options={{ headerShown: false }} />
+                {/* Task-oriented screens (quick-capture/, expenses/, trips/)
+                    are auto-discovered by expo-router from the file system.
+                    We deliberately do NOT declare them here as Stack.Screen
+                    entries — doing so caused expo-router to register them
+                    twice (once auto-discovered, once explicit) and the
+                    bundler emitted two compiled copies. The second copy
+                    was stale source (pre-PR#5) that the router then
+                    resolved to at runtime. Each screen file owns its own
+                    header via its own <Stack.Screen options> child. */}
               </Stack>
               <StatusBar style="auto" />
             </ThemeProvider>
