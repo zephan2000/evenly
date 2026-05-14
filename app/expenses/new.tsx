@@ -85,37 +85,30 @@ export default function ManualExpenseEntryScreen() {
 
   // Resolve current trip on mount.
   useEffect(() => {
-    console.log('[manual-entry] effect fired, isSignedIn=', isSignedIn);
     if (!isSignedIn) return;
     let cancelled = false;
     (async () => {
       try {
-        console.log('[manual-entry] step 1: fetching trips + storedId');
         const [trips, storedId] = await Promise.all([
           listTrips(() => getTokenRef.current()),
           getCurrentTripId(),
         ]);
-        console.log('[manual-entry] step 2: trips=', trips.length, 'storedId=', storedId);
         if (cancelled) return;
         if (trips.length === 0) {
           setLoad({ kind: 'no_trips' });
           return;
         }
         const picked = trips.find((t) => t.id === storedId) ?? trips[0];
-        console.log('[manual-entry] step 3: picked trip', picked.id);
         // Fetch trip members so the payer picker has something to render.
         // We do this AFTER trip resolution so the request is scoped to the
         // visible trip; switching trips on home is rare enough that we
         // don't pre-warm.
         const members = await listTripMembers(() => getTokenRef.current(), picked.id);
-        console.log('[manual-entry] step 4: members fetched, count=', members.length);
         if (cancelled) return;
         setLoad({ kind: 'ready', trip: picked, members });
         setForm(emptyExpense(picked.home_currency));
         setSelectedPayerId(picked.owner_member_id);
-        console.log('[manual-entry] step 5: setLoad ready done');
       } catch (e) {
-        console.log('[manual-entry] caught error', e);
         if (cancelled) return;
         setLoad({
           kind: 'error',
