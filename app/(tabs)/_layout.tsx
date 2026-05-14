@@ -55,23 +55,15 @@ export default function TabLayout() {
             }}
           />
           {/*
-            Non-tab routes now live at app/expenses/, app/quick-capture/,
-            app/trips/ — they push onto the root Stack instead of mounting
-            as hidden siblings inside (tabs). That fixes the DOM-accumulation
-            bug where every navigation kept the previous screen alive in
-            the tree (six full screen subtrees stacked after Home → Members
-            → Add expense → C6 → Split → Settings).
-
-            But expo-router's <Tabs> still auto-discovers them as tab-bar
-            entries unless we explicitly tell it not to. href: null keeps
-            the tab strip clean while leaving the routes reachable via
-            router.push from anywhere.
+            Non-tab routes live at app/expenses/, app/quick-capture/,
+            app/trips/ — they push onto the root Stack via app/_layout.tsx.
+            We deliberately do NOT declare them here as Tabs.Screen
+            entries: doing so makes expo-router register the same route
+            under two parents (root Stack + (tabs) Tabs), and the
+            bundler ends up emitting the route's module twice. The
+            tabs-side resolver renders the wrong (stale) chunk on
+            navigation. See the PR #5/#7/#8 saga.
           */}
-          <Tabs.Screen name="quick-capture" options={{ href: null }} />
-          <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
-          <Tabs.Screen name="expenses/[id]/split" options={{ href: null }} />
-          <Tabs.Screen name="expenses/new" options={{ href: null }} />
-          <Tabs.Screen name="trips/[id]/members" options={{ href: null }} />
         </Tabs>
       </SignedIn>
       <SignedOut>
