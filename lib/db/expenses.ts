@@ -25,6 +25,11 @@ export type ExpenseRecord = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Trip's home_currency, joined in by GET /api/expenses/[id] so the
+   *  split-screen breakdown can render amounts in either currency
+   *  without a second fetch. Present on detail; absent on the lighter
+   *  list payload (`null` then). */
+  home_currency?: string | null;
 };
 
 export type ExpenseItem = {

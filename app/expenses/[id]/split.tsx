@@ -16,7 +16,7 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,8 @@ import { Card } from '@/components/ui/card';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { Neutral, Space } from '@/constants/theme';
+import { Brand, Neutral, Space } from '@/constants/theme';
+import { formatMinor, getCurrencyDecimals } from '@/lib/fx/currency';
 import { getExpense, type ExpenseDetail } from '@/lib/db/expenses';
 import { saveExpenseSplits } from '@/lib/db/splits';
 import { listTripMembers, type TripMember } from '@/lib/db/trip-members';
@@ -41,7 +42,6 @@ import {
 } from '@/lib/splitting/state';
 import { SpotlightWizard } from '@/lib/ux/spotlight-wizard';
 import type { WizardStepDescriptor } from '@/lib/ux/spotlight-wizard-logic';
-import { formatMinor } from '@/lib/fx/currency';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -341,7 +341,17 @@ function SplitEditor({
       id: sk.id,
       title: sk.title,
       status: sk.status,
-      content: <ReviewContent state={state} currency={currency} members={splittingMembers} />,
+      content: (
+        <ReviewContent
+          state={state}
+          members={splittingMembers}
+          items={items}
+          originalCurrency={currency}
+          homeCurrency={expense.home_currency ?? null}
+          fxRate={Number(expense.fx_rate ?? 1)}
+          fxStatus={expense.fx_rate_status}
+        />
+      ),
       summary: (
         <Text variant="body" color="textSecondary">
           Per-member breakdown
@@ -560,38 +570,204 @@ function PerPersonPanelContent({
   );
 }
 
+type ItemLite = { id: string; name: string };
+
+type ViewCurrency = 'original' | 'home';
+
+/**
+ * Convert a minor-unit amount from one currency to another using the
+ * snapshotted FX rate on the expense. Returns the same value when:
+ *   - source and target are equal
+ *   - FX is stale (we don't trust the rate; render in original units
+ *     but tagged with the home currency code; same fallback the home
+ *     hero already uses)
+ *
+ * Pure helper kept inline so the trust math is visible alongside the
+ * Show-math UI. Matches /api/expenses+api.ts:convertMinorUnits.
+ */
+function convertMinor(
+  amountMinor: bigint,
+  fromCurrency: string,
+  toCurrency: string,
+  rate: number,
+  status: ExpenseDetail['expense']['fx_rate_status'] | null,
+): bigint {
+  if (fromCurrency.toUpperCase() === toCurrency.toUpperCase()) return amountMinor;
+  if (status === 'stale') return amountMinor;
+  const fromDec = getCurrencyDecimals(fromCurrency);
+  const toDec = getCurrencyDecimals(toCurrency);
+  const major = Number(amountMinor) / 10 ** fromDec;
+  const homeMajor = major * rate;
+  const homeMinor = homeMajor * 10 ** toDec;
+  if (!Number.isFinite(homeMinor)) return 0n;
+  const abs = Math.abs(homeMinor);
+  const rounded = Math.floor(abs + 0.5);
+  const sign = homeMinor < 0 ? -1n : 1n;
+  return sign * BigInt(rounded);
+}
+
 function ReviewContent({
   state,
-  currency,
   members,
+  items,
+  originalCurrency,
+  homeCurrency,
+  fxRate,
+  fxStatus,
 }: {
   state: SplitDraft;
-  currency: string;
   members: SplittingMember[];
+  items: readonly ItemLite[];
+  originalCurrency: string;
+  homeCurrency: string | null;
+  fxRate: number;
+  fxStatus: ExpenseDetail['expense']['fx_rate_status'] | null;
 }) {
   const breakdown = breakdownPerMember(state);
+  const itemNameById = new Map(items.map((it) => [it.id, it.name] as const));
+
+  // Default to receipt (original) currency — most familiar since the user
+  // just looked at the paper bill. Toggle to settlement currency uses the
+  // expense's snapshotted fx_rate; stale rows fall back to raw minor units
+  // (matches the home hero's "+ N awaiting FX" treatment).
+  const [view, setView] = useState<ViewCurrency>('original');
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  const canConvert = homeCurrency && homeCurrency.toUpperCase() !== originalCurrency.toUpperCase();
+  const displayCurrency =
+    view === 'home' && canConvert ? (homeCurrency as string) : originalCurrency;
+
+  const render = (minor: bigint): string => {
+    const inView =
+      view === 'home' && canConvert
+        ? convertMinor(minor, originalCurrency, homeCurrency as string, fxRate, fxStatus)
+        : minor;
+    return `${displayCurrency} ${formatMinor(inView, displayCurrency)}`;
+  };
+
+  const toggleExpanded = (memberId: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+
+  const showStaleNote = view === 'home' && fxStatus === 'stale';
+
   return (
     <View style={blockStyles.stack}>
       <Text variant="caption" color="textSecondary">
         Pre-tax share + each member&apos;s proportional service / tip / tax.
       </Text>
+
+      {canConvert ? (
+        <SegmentedControl
+          options={[
+            { label: `Receipt (${originalCurrency})`, value: 'original' },
+            { label: `Settlement (${homeCurrency})`, value: 'home' },
+          ]}
+          value={view}
+          onChange={setView}
+        />
+      ) : null}
+
+      {showStaleNote ? (
+        <Text variant="caption" color="textSecondary">
+          FX rate wasn&apos;t available at save time, so settlement-currency totals fall back to the
+          original amount. Numbers will be off until the rate is filled in.
+        </Text>
+      ) : null}
+
       {members.map((member) => {
         const b = breakdown.get(member.id);
         const total = b?.total ?? 0n;
         const charges = b?.charges ?? 0n;
-        const items = b?.charges !== undefined ? total - charges : 0n;
+        const itemsTotal = b ? total - charges : 0n;
+        const isExpanded = expanded.has(member.id);
         return (
-          <View key={member.id} style={blockStyles.reviewRow}>
-            <View style={blockStyles.reviewRowLeft}>
-              <Text variant="bodyStrong">{member.display_name}</Text>
-              <Text variant="caption" color="textSecondary" tabularNums>
-                Items {currency} {formatMinor(items, currency)} · charges {currency}{' '}
-                {formatMinor(charges, currency)}
-              </Text>
+          <View key={member.id} style={blockStyles.reviewMemberBlock}>
+            <View style={blockStyles.reviewRow}>
+              <View style={blockStyles.reviewRowLeft}>
+                <Text variant="bodyStrong">{member.display_name}</Text>
+                <Text variant="caption" color="textSecondary" tabularNums>
+                  Items {render(itemsTotal)} · charges {render(charges)}
+                </Text>
+              </View>
+              <View style={blockStyles.reviewRowRight}>
+                <Text variant="bodyStrong" tabularNums>
+                  {render(total)}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isExpanded
+                      ? `Hide math for ${member.display_name}`
+                      : `Show math for ${member.display_name}`
+                  }
+                  onPress={() => toggleExpanded(member.id)}
+                  hitSlop={8}
+                >
+                  <Text variant="caption" color="brandInteractive">
+                    {isExpanded ? 'Hide math' : 'Show math'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-            <Text variant="bodyStrong" tabularNums>
-              {currency} {formatMinor(total, currency)}
-            </Text>
+            {isExpanded ? (
+              <View style={blockStyles.mathBlock}>
+                {b && b.items.size > 0 ? (
+                  <>
+                    {Array.from(b.items.entries()).map(([itemId, share]) => (
+                      <View key={itemId} style={blockStyles.mathRow}>
+                        <Text variant="body" color="textSecondary" numberOfLines={1}>
+                          {itemNameById.get(itemId) ?? 'Item'}
+                        </Text>
+                        <Text variant="body" color="textSecondary" tabularNums>
+                          {render(share)}
+                        </Text>
+                      </View>
+                    ))}
+                    <View style={blockStyles.mathDivider} />
+                  </>
+                ) : (
+                  <Text variant="caption" color="textSecondary">
+                    No items assigned.
+                  </Text>
+                )}
+                <View style={blockStyles.mathRow}>
+                  <Text variant="body" color="textSecondary">
+                    Service charge share
+                  </Text>
+                  <Text variant="body" color="textSecondary" tabularNums>
+                    {render(b?.service_charge ?? 0n)}
+                  </Text>
+                </View>
+                <View style={blockStyles.mathRow}>
+                  <Text variant="body" color="textSecondary">
+                    Tip share
+                  </Text>
+                  <Text variant="body" color="textSecondary" tabularNums>
+                    {render(b?.tip ?? 0n)}
+                  </Text>
+                </View>
+                <View style={blockStyles.mathRow}>
+                  <Text variant="body" color="textSecondary">
+                    Tax share
+                  </Text>
+                  <Text variant="body" color="textSecondary" tabularNums>
+                    {render(b?.tax_amount ?? 0n)}
+                  </Text>
+                </View>
+                <View style={blockStyles.mathDivider} />
+                <View style={blockStyles.mathRow}>
+                  <Text variant="bodyStrong">Total</Text>
+                  <Text variant="bodyStrong" tabularNums>
+                    {render(total)}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
           </View>
         );
       })}
@@ -661,6 +837,9 @@ const blockStyles = StyleSheet.create({
     gap: Space[8],
   },
   memberName: { flex: 1 },
+  reviewMemberBlock: {
+    gap: Space[8],
+  },
   reviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -668,4 +847,27 @@ const blockStyles = StyleSheet.create({
     gap: Space[12],
   },
   reviewRowLeft: { flex: 1, gap: Space[4] },
+  reviewRowRight: {
+    alignItems: 'flex-end',
+    gap: Space[4],
+  },
+  mathBlock: {
+    gap: Space[8],
+    paddingLeft: Space[16],
+    paddingTop: Space[8],
+    paddingBottom: Space[8],
+    borderLeftWidth: 2,
+    borderLeftColor: Brand.washBg,
+  },
+  mathRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space[12],
+  },
+  mathDivider: {
+    height: 1,
+    backgroundColor: Neutral.borderSubtle,
+    marginVertical: Space[4],
+  },
 });

@@ -40,7 +40,10 @@ export async function GET(request: Request) {
   });
 
   const client = createUserClient(auth.jwt);
-  const { data: expense, error: expenseErr } = await client
+  // Join trips.home_currency so the split-screen breakdown can render
+  // amounts in either the receipt's original_currency or the trip's
+  // home (settlement) currency without a second round-trip.
+  const { data: expenseRow, error: expenseErr } = await client
     .from('expenses')
     .select(
       [
@@ -64,11 +67,26 @@ export async function GET(request: Request) {
         'notes',
         'created_at',
         'updated_at',
+        'trips!inner(home_currency)',
       ].join(', '),
     )
     .eq('id', id)
     .is('deleted_at', null)
     .maybeSingle();
+  // Flatten the joined trips.home_currency into a top-level field; the
+  // client expects ExpenseRecord-shaped rows + a sibling home_currency.
+  // The supabase-js generated type is wider than what we actually return,
+  // so cast at this boundary.
+  const expense = expenseRow
+    ? (() => {
+        const raw = expenseRow as unknown as Record<string, unknown> & {
+          trips?: { home_currency?: string } | { home_currency?: string }[] | null;
+        };
+        const tripRow = Array.isArray(raw.trips) ? raw.trips[0] : raw.trips;
+        const { trips: _trips, ...rest } = raw;
+        return { ...rest, home_currency: tripRow?.home_currency ?? null };
+      })()
+    : null;
 
   if (expenseErr) {
     return Response.json(
