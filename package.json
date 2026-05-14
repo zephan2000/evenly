@@ -11,7 +11,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build": "rm -rf .expo dist node_modules/.cache && expo export -p web --clear",
+    "build": "rm -rf .expo dist node_modules/.cache /tmp/metro-* /tmp/haste-map-* && expo export -p web --clear",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
