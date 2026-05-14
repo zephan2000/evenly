@@ -40,6 +40,11 @@ export type MemberBreakdown = {
   items: Map<string, bigint>;
   /** Proportional service + tip + tax allocated to this member, summed. */
   charges: bigint;
+  /** Per-charge breakdown — same total as `charges`, decomposed so the
+   *  "Show math" view can list each line separately. */
+  service_charge: bigint;
+  tip: bigint;
+  tax_amount: bigint;
   /** items_total + charges. Convenience. */
   total: bigint;
 };
@@ -171,11 +176,16 @@ export function distributeProportional(
         itemsTotal += share;
       }
     }
-    const chargeTotal =
-      (service.get(memberId) ?? 0n) + (tip.get(memberId) ?? 0n) + (tax.get(memberId) ?? 0n);
+    const serviceShare = service.get(memberId) ?? 0n;
+    const tipShare = tip.get(memberId) ?? 0n;
+    const taxShare = tax.get(memberId) ?? 0n;
+    const chargeTotal = serviceShare + tipShare + taxShare;
     out.set(memberId, {
       items: perItem,
       charges: chargeTotal,
+      service_charge: serviceShare,
+      tip: tipShare,
+      tax_amount: taxShare,
       total: itemsTotal + chargeTotal,
     });
   }
