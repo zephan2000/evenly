@@ -1,5 +1,5 @@
 {
-  "buildCommand": "rm -rf .expo dist && npm run build",
+  "buildCommand": "rm -rf .expo dist node_modules/.cache && npx expo export -p web --clear",
   "outputDirectory": "dist/client",
   "functions": {
     "api/index.ts": {
