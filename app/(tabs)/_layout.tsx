@@ -55,25 +55,25 @@ export default function TabLayout() {
             }}
           />
           {/*
-            Non-tab routes live at app/expenses/, app/quick-capture/,
-            app/trips/. With output:'single' (PR #16), expo-router's
-            <Tabs> auto-discovers them as siblings and renders them in
-            the tab strip. href:null keeps each route reachable via
-            router.push but hides its tab button.
+            Non-tab routes (app/expenses/, app/quick-capture/,
+            app/trips/) are NOT declared here. Declaring them as
+            <Tabs.Screen> binds them to the Tabs navigator, which
+            (a) overrides their file-based parent (root Stack) and
+            (b) double-registers each route → the bundler emits two
+            compiled chunks and the runtime resolves to the stale one.
 
-            Earlier worry (PR #11) was that explicit declarations here
-            cause double module registration. Empirically that wasn't
-            the dupe source (we found phantom (tabs)/ prefixes in
-            output:'server' mode were the real cause). In single mode
-            with the API routes migrated out, double-registration
-            doesn't occur — we need these entries purely to keep the
-            tab strip clean.
+            That's the actual root cause of the "Paid by picker never
+            renders" saga: PR #11 correctly removed these; PR #17
+            wrongly re-added them to tidy the tab strip and brought
+            the dupe back. Decoded bundle confirmed manual entry +
+            members each compiled twice while home (a real (tabs)
+            child) compiled once.
+
+            Without these entries the routes are pure root-Stack
+            children: they push on top of the tab bar (which is
+            correctly absent on a task screen — the iOS-native
+            pattern) and never appear in the tab strip.
           */}
-          <Tabs.Screen name="quick-capture" options={{ href: null }} />
-          <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
-          <Tabs.Screen name="expenses/[id]/split" options={{ href: null }} />
-          <Tabs.Screen name="expenses/new" options={{ href: null }} />
-          <Tabs.Screen name="trips/[id]/members" options={{ href: null }} />
         </Tabs>
       </SignedIn>
       <SignedOut>
