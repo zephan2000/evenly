@@ -394,7 +394,7 @@ export default function HomeScreen() {
                     label="Add expense"
                     variant="secondary"
                     size="md"
-                    onPress={() => router.push('/expenses/add')}
+                    onPress={() => router.push('/expenses/new')}
                   />
                 ) : null}
               </View>
