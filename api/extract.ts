@@ -9,9 +9,9 @@
 // path's first folder segment and verify the caller owns that trip via
 // PostgREST (which honors trips RLS correctly).
 
-import { extractReceipt } from '@/lib/ai/extract';
-import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
-import { createAdminClient, createUserClient } from '@/lib/db/server';
+import { extractReceipt } from '../lib/ai/extract';
+import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '../lib/auth/server';
+import { createAdminClient, createUserClient } from '../lib/db/server';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

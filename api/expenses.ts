@@ -10,11 +10,11 @@
 
 import { z } from 'zod';
 
-import { PersistedExpenseSchema } from '@/lib/ai/schema';
-import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
-import { createUserClient } from '@/lib/db/server';
-import { getCurrencyDecimals } from '@/lib/fx/currency';
-import { FxRateError, fetchFxRate, type FxRateStatus } from '@/lib/fx/rates';
+import { PersistedExpenseSchema } from '../lib/ai/schema';
+import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '../lib/auth/server';
+import { createUserClient } from '../lib/db/server';
+import { getCurrencyDecimals } from '../lib/fx/currency';
+import { FxRateError, fetchFxRate, type FxRateStatus } from '../lib/fx/rates';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIST_LIMIT = 50;

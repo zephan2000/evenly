@@ -13,8 +13,12 @@
 // rate=1) are summed as-is, matching the home's other "stale = treat as
 // home currency" fallback — imperfect but consistent.
 
-import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
-import { createUserClient } from '@/lib/db/server';
+import {
+  decodeJwtClaims,
+  getJwtFromRequest,
+  upsertUserOnFirstSeen,
+} from '../../../lib/auth/server';
+import { createUserClient } from '../../../lib/db/server';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

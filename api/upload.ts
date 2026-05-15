@@ -17,8 +17,8 @@
 // for any future direct-from-client uploads, but this route now performs
 // the authoritative ownership check itself.
 
-import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
-import { createAdminClient, createUserClient } from '@/lib/db/server';
+import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '../lib/auth/server';
+import { createAdminClient, createUserClient } from '../lib/db/server';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

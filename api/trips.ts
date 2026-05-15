@@ -6,8 +6,8 @@
 
 import { z } from 'zod';
 
-import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
-import { createUserClient } from '@/lib/db/server';
+import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '../lib/auth/server';
+import { createUserClient } from '../lib/db/server';
 
 type JwtClaims = NonNullable<ReturnType<typeof decodeJwtClaims>>;
 

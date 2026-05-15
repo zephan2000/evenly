@@ -6,8 +6,8 @@
 // user-scoped Supabase client. The expenses + expense_items RLS policies
 // limit visibility to trip members; a missing row reads as 404.
 
-import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '@/lib/auth/server';
-import { createUserClient } from '@/lib/db/server';
+import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '../../lib/auth/server';
+import { createUserClient } from '../../lib/db/server';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
