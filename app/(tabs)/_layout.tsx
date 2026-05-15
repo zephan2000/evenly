@@ -56,14 +56,24 @@ export default function TabLayout() {
           />
           {/*
             Non-tab routes live at app/expenses/, app/quick-capture/,
-            app/trips/ — they push onto the root Stack via app/_layout.tsx.
-            We deliberately do NOT declare them here as Tabs.Screen
-            entries: doing so makes expo-router register the same route
-            under two parents (root Stack + (tabs) Tabs), and the
-            bundler ends up emitting the route's module twice. The
-            tabs-side resolver renders the wrong (stale) chunk on
-            navigation. See the PR #5/#7/#8 saga.
+            app/trips/. With output:'single' (PR #16), expo-router's
+            <Tabs> auto-discovers them as siblings and renders them in
+            the tab strip. href:null keeps each route reachable via
+            router.push but hides its tab button.
+
+            Earlier worry (PR #11) was that explicit declarations here
+            cause double module registration. Empirically that wasn't
+            the dupe source (we found phantom (tabs)/ prefixes in
+            output:'server' mode were the real cause). In single mode
+            with the API routes migrated out, double-registration
+            doesn't occur — we need these entries purely to keep the
+            tab strip clean.
           */}
+          <Tabs.Screen name="quick-capture" options={{ href: null }} />
+          <Tabs.Screen name="expenses/[id]" options={{ href: null }} />
+          <Tabs.Screen name="expenses/[id]/split" options={{ href: null }} />
+          <Tabs.Screen name="expenses/new" options={{ href: null }} />
+          <Tabs.Screen name="trips/[id]/members" options={{ href: null }} />
         </Tabs>
       </SignedIn>
       <SignedOut>
