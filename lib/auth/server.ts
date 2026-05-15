@@ -3,7 +3,7 @@
 // "supabase" template signs with Supabase's JWT secret), so route handlers
 // only need to extract the bearer token and let RLS enforce access.
 
-import { createAdminClient } from '@/lib/db/server';
+import { createAdminClient } from '../db/server';
 
 export type GetJwtError = { kind: 'missing_token' } | { kind: 'malformed_token' };
 
