@@ -1,14 +1,24 @@
-import { useAuth, useClerk } from '@clerk/clerk-expo';
+import { useAuth, useClerk, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { MockupFontToggle } from '@/components/mockup-font-toggle';
 import { useMockFontSet } from '@/components/mockup-font-provider';
-import { AppScreen, Button, Card, EditorialHero, SettingsRow, Text } from '@/components/ui';
+import {
+  AppScreen,
+  Banner,
+  Button,
+  Card,
+  EditorialHero,
+  SettingsRow,
+  Text,
+  TextInput,
+} from '@/components/ui';
 import { BrandAssets } from '@/constants/brand-assets';
-import { Brand, Neutral, Radius } from '@/constants/theme';
+import { Brand, Radius } from '@/constants/theme';
+import { getMyDisplayName, updateMyDisplayName } from '@/lib/db/me';
 
 const settingsRows = [
   'Only the hero phrase changes',
@@ -18,8 +28,100 @@ const settingsRows = [
 
 export default function SettingsScreen() {
   const { headlineMood } = useMockFontSet();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
   const clerk = useClerk();
+
+  // --- Your name (B6/B7): persist users.display_name + propagate to trips ---
+  const [name, setName] = useState('');
+  const [nameLoading, setNameLoading] = useState(true);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameFeedback, setNameFeedback] = useState<{
+    variant: 'success' | 'error';
+    title: string;
+    description?: string;
+  } | null>(null);
+
+  // Refs so the loader effect doesn't loop on Clerk's changing getToken and
+  // never clobbers a name the user has started typing.
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+  const dirtyRef = useRef(false);
+  const clerkSuggestion =
+    user?.fullName?.trim() ||
+    user?.username?.trim() ||
+    user?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+    '';
+  const clerkSuggestionRef = useRef(clerkSuggestion);
+  useEffect(() => {
+    clerkSuggestionRef.current = clerkSuggestion;
+  }, [clerkSuggestion]);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setNameLoading(false);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const saved = await getMyDisplayName(() => getTokenRef.current());
+        if (!active || dirtyRef.current) return;
+        setName(saved ?? clerkSuggestionRef.current);
+      } catch {
+        if (!active || dirtyRef.current) return;
+        setName(clerkSuggestionRef.current);
+      } finally {
+        if (active) setNameLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isSignedIn, user?.id]);
+
+  const onSaveName = useCallback(async () => {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      setNameFeedback({
+        variant: 'error',
+        title: 'Enter a name',
+        description: 'Your name can’t be empty.',
+      });
+      return;
+    }
+    setNameSaving(true);
+    setNameFeedback(null);
+    try {
+      const r = await updateMyDisplayName(() => getTokenRef.current(), trimmed);
+      dirtyRef.current = false;
+      setName(r.display_name);
+      const base =
+        r.trips_updated > 0
+          ? `Applied to ${r.trips_updated} trip${r.trips_updated === 1 ? '' : 's'}.`
+          : 'Saved.';
+      const skipNote =
+        r.trips_skipped > 0
+          ? ` ${r.trips_skipped} trip${r.trips_skipped === 1 ? '' : 's'} kept a different name (a member there already uses “${trimmed}”).`
+          : '';
+      setNameFeedback({
+        variant: 'success',
+        title: 'Name saved',
+        description: base + skipNote,
+      });
+    } catch {
+      setNameFeedback({
+        variant: 'error',
+        title: 'Couldn’t save',
+        description: 'Check your connection and try again.',
+      });
+    } finally {
+      setNameSaving(false);
+    }
+  }, [name]);
+
   const welcomeMoodLabel =
     headlineMood === 'steady'
       ? 'Steady keeps the hero crisp, direct, and native to the product.'
@@ -43,6 +145,45 @@ export default function SettingsScreen() {
           Keep the app readable, then personalize the emotional tone of the hero phrase.
         </Text>
       </Card>
+
+      {isSignedIn ? (
+        <Card raised style={styles.profileCard}>
+          <Text variant="subtitle">Your name</Text>
+          <Text variant="body" color="textSecondary">
+            How you appear on trips and in “Paid by”.
+          </Text>
+          <TextInput
+            label="Display name"
+            value={name}
+            onChangeText={(v) => {
+              setName(v);
+              dirtyRef.current = true;
+            }}
+            placeholder={nameLoading ? 'Loading…' : 'e.g. Zephan'}
+            autoCapitalize="words"
+            autoCorrect={false}
+            maxLength={80}
+            editable={!nameLoading && !nameSaving}
+            returnKeyType="done"
+            onSubmitEditing={onSaveName}
+          />
+          {nameFeedback ? (
+            <Banner
+              variant={nameFeedback.variant}
+              title={nameFeedback.title}
+              description={nameFeedback.description}
+            />
+          ) : null}
+          <Button
+            label="Save name"
+            size="md"
+            fullWidth
+            loading={nameSaving}
+            disabled={nameLoading || name.trim().length === 0}
+            onPress={onSaveName}
+          />
+        </Card>
+      ) : null}
 
       <MockupFontToggle />
 
@@ -129,6 +270,9 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   authCard: {
+    gap: 12,
+  },
+  profileCard: {
     gap: 12,
   },
   moodCard: {

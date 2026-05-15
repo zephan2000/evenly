@@ -24,6 +24,7 @@ type AuthedUser = {
   jwt: string;
   claims: JwtClaims;
   userId: string;
+  displayName: string | null;
 };
 type AuthedFailure = {
   ok: false;
@@ -38,13 +39,13 @@ async function authedUser(request: Request): Promise<AuthedUser | AuthedFailure>
   const claims = decodeJwtClaims(auth.jwt);
   if (!claims?.sub) return { ok: false, status: 401, error: 'invalid_jwt' };
 
-  const { id } = await upsertUserOnFirstSeen({
+  const { id, displayName } = await upsertUserOnFirstSeen({
     clerkUserId: claims.sub,
     email: claims.email ?? null,
     displayName: claims.name ?? null,
   });
 
-  return { ok: true, jwt: auth.jwt, claims, userId: id };
+  return { ok: true, jwt: auth.jwt, claims, userId: id, displayName };
 }
 
 export async function GET(request: Request) {
@@ -120,8 +121,14 @@ export async function POST(request: Request) {
     );
   }
 
+  // Owner's saved profile name (Settings) wins over JWT/email guesses; the
+  // literal 'Owner' is only the true last resort.
   const fallbackName =
-    parsed.data.display_name ?? a.claims.name ?? a.claims.email?.split('@')[0] ?? 'Owner';
+    parsed.data.display_name ??
+    a.displayName ??
+    a.claims.name ??
+    a.claims.email?.split('@')[0] ??
+    'Owner';
 
   const { data: member, error: memberErr } = await client
     .from('trip_members')

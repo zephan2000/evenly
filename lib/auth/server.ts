@@ -42,21 +42,49 @@ export type UpsertUserInput = {
   displayName?: string | null;
 };
 
-export async function upsertUserOnFirstSeen(input: UpsertUserInput): Promise<{ id: string }> {
+// Seed-only on display_name: the name is owned by the user (Settings →
+// PATCH /api/me). claims.name only *seeds* it on first creation or when still
+// empty — we must never clobber a user-set name with null on a later request
+// (Clerk JWTs here carry no `name` claim, so a blind upsert would wipe it).
+// Returns the effective stored display_name so callers skip a re-read.
+export async function upsertUserOnFirstSeen(
+  input: UpsertUserInput,
+): Promise<{ id: string; displayName: string | null }> {
   const admin = createAdminClient();
+
+  const { data: existing, error: selErr } = await admin
+    .from('users')
+    .select('id, display_name')
+    .eq('clerk_user_id', input.clerkUserId)
+    .maybeSingle();
+  if (selErr) throw new Error(`upsertUserOnFirstSeen select failed: ${selErr.message}`);
+
+  if (existing) {
+    const patch: { email: string | null; display_name?: string } = {
+      email: input.email ?? null,
+    };
+    if (!existing.display_name && input.displayName) {
+      patch.display_name = input.displayName;
+    }
+    const { data, error } = await admin
+      .from('users')
+      .update(patch)
+      .eq('id', existing.id)
+      .select('id, display_name')
+      .single();
+    if (error) throw new Error(`upsertUserOnFirstSeen update failed: ${error.message}`);
+    return { id: data.id, displayName: data.display_name ?? null };
+  }
+
   const { data, error } = await admin
     .from('users')
-    .upsert(
-      {
-        clerk_user_id: input.clerkUserId,
-        email: input.email ?? null,
-        display_name: input.displayName ?? null,
-      },
-      { onConflict: 'clerk_user_id', ignoreDuplicates: false },
-    )
-    .select('id')
+    .insert({
+      clerk_user_id: input.clerkUserId,
+      email: input.email ?? null,
+      display_name: input.displayName ?? null,
+    })
+    .select('id, display_name')
     .single();
-
-  if (error) throw new Error(`upsertUserOnFirstSeen failed: ${error.message}`);
-  return { id: data.id };
+  if (error) throw new Error(`upsertUserOnFirstSeen insert failed: ${error.message}`);
+  return { id: data.id, displayName: data.display_name ?? null };
 }
