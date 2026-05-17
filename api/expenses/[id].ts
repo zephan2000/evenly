@@ -7,7 +7,7 @@
 // limit visibility to trip members; a missing row reads as 404.
 
 import { decodeJwtClaims, getJwtFromRequest, upsertUserOnFirstSeen } from '../../lib/auth/server';
-import { createUserClient } from '../../lib/db/server';
+import { createAdminClient, createUserClient } from '../../lib/db/server';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -154,23 +154,25 @@ export async function DELETE(request: Request) {
     displayName: claims.name ?? null,
   });
 
-  const client = createUserClient(auth.jwt);
+  // Why ownership-check-then-admin-write instead of a plain RLS UPDATE:
+  // a soft-delete UPDATE that returns ANY row trips PostgREST's
+  // RETURNING/count CTE, and Postgres then re-applies the SELECT policy
+  // (expenses_select_trip_owner carries `deleted_at is null`) to the
+  // post-update row — which now has deleted_at set — raising "new row
+  // violates row-level security policy for table expenses" (500). Trying to
+  // suppress RETURNING at the policy/PostgREST layer is brittle and
+  // version-dependent. Instead: gate on the same trip-owner SELECT policy
+  // (user client), then perform the write with the admin client (RLS
+  // bypassed) — robust regardless of policy text, drift, or PostgREST
+  // internals. This is the codebase's standard "verify, then trusted
+  // server write" pattern (cf. upsertUserOnFirstSeen, the /api/me backfill).
+  const userClient = createUserClient(auth.jwt);
 
-  // Soft-delete must emit ZERO `RETURNING`. Any RETURNING — including the
-  // CTE PostgREST builds for `.select()` AND for `{ count: 'exact' }`
-  // (`WITH s AS (UPDATE ... RETURNING *) SELECT count(*) FROM s`) — makes
-  // Postgres re-apply the SELECT policy (expenses_select_trip_owner, which
-  // carries `deleted_at is null`) to the post-update row, which now has
-  // deleted_at set, raising "new row violates row-level security policy
-  // for table expenses" (500).
-  //
-  // So: (1) a pre-check SELECT (gated by the same SELECT policy) decides
-  // not-found/forbidden — null for non-owners or already-deleted rows, so
-  // we don't leak presence — then (2) a bare UPDATE with no `.select()`
-  // and no count → PostgREST `return=minimal` → plain `UPDATE`, no
-  // RETURNING, SELECT policy never touches the soft-deleted row. A delete
-  // racing in between just no-ops the UPDATE; the outcome is still deleted.
-  const { data: target, error: findErr } = await client
+  // expenses_select_trip_owner (trip-owner AND deleted_at is null) makes
+  // this null for non-owners, missing rows, and already-deleted rows
+  // alike — 404 never leaks the presence of an expense the caller can't
+  // see. Contract unchanged.
+  const { data: target, error: findErr } = await userClient
     .from('expenses')
     .select('id')
     .eq('id', id)
@@ -187,7 +189,11 @@ export async function DELETE(request: Request) {
     return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
   }
 
-  const { error } = await client
+  // Ownership confirmed above. Admin client bypasses RLS, so the UPDATE
+  // can't hit the RETURNING/SELECT-policy interaction. Scoped to the exact
+  // id; `deleted_at is null` keeps it idempotent if a delete raced in.
+  const admin = createAdminClient();
+  const { error } = await admin
     .from('expenses')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
