@@ -156,18 +156,23 @@ export async function DELETE(request: Request) {
 
   const client = createUserClient(auth.jwt);
 
-  // Soft-delete via UPDATE. The existing expenses_update_trip_owner RLS
-  // policy gates write access to the trip's owner; non-owners get filtered
-  // out and the affected-row count comes back zero. We treat zero rows as
-  // 'not found or forbidden' = 404 so we don't leak presence of an
-  // expense the caller can't see.
-  const { data, error } = await client
+  // Soft-delete via UPDATE. The expenses_update_trip_owner RLS policy gates
+  // write access to the trip's owner; non-owners match zero rows.
+  //
+  // Do NOT add `.select()` here. `.select()` makes PostgREST append
+  // RETURNING, and Postgres then re-applies the SELECT policy
+  // (expenses_select_trip_owner, which carries `deleted_at is null`) to the
+  // *post-update* row — which now has deleted_at set — raising
+  // "new row violates row-level security policy for table expenses" (500).
+  // Instead we request an exact affected-row count with return=minimal (no
+  // RETURNING), so the SELECT policy is never applied to the soft-deleted
+  // row. Zero rows = 'not found or forbidden' (404) so we don't leak the
+  // presence of an expense the caller can't see.
+  const { count, error } = await client
     .from('expenses')
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
     .eq('id', id)
-    .is('deleted_at', null)
-    .select('id')
-    .maybeSingle();
+    .is('deleted_at', null);
 
   if (error) {
     return Response.json(
@@ -175,9 +180,9 @@ export async function DELETE(request: Request) {
       { status: 500 },
     );
   }
-  if (!data) {
+  if (!count) {
     return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
   }
 
-  return Response.json({ ok: true, id: data.id }, { status: 200 });
+  return Response.json({ ok: true }, { status: 200 });
 }

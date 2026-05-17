@@ -7,7 +7,7 @@ Authoritative description of the Postgres schema. Migrations in `supabase/migrat
 - All IDs are `uuid` with `gen_random_uuid()` default.
 - Timestamps are `timestamptz` with `default now()`.
 - Money is stored as `bigint` minor units (cents) — never `float` or `numeric` for amounts. Currency is a separate `char(3)` (ISO 4217).
-- Soft deletes: `deleted_at timestamptz`. Always filter `deleted_at IS NULL` in queries.
+- Soft deletes: `deleted_at timestamptz`. Always filter `deleted_at IS NULL` in queries. **A soft-delete UPDATE must not use `RETURNING` (PostgREST `.select()`).** SELECT policies carry `deleted_at IS NULL`, and Postgres re-applies the SELECT policy to the row returned by `UPDATE ... RETURNING` — the just-soft-deleted row fails it and the statement errors with `new row violates row-level security policy`. Soft-delete with `return=minimal` + an exact affected-row `count` instead. UPDATE policies' `WITH CHECK` must likewise exclude `deleted_at IS NULL`.
 - RLS is enforced on every table. Anonymous access goes through a `trip_member_token` cookie/header that resolves to a `trip_members` row.
 
 ## Tables
@@ -184,7 +184,7 @@ PK: `(from_ccy, to_ccy, as_of)`.
 
 - `trips`: owner can SELECT/UPDATE; members can SELECT.
 - `trip_members`: members of the same trip can SELECT each other.
-- `expenses`, `expense_items`, `expense_item_splits`: trip members can SELECT/INSERT; UPDATE/DELETE allowed in casual mode for any member, in strict mode only for the creator or owner.
+- `expenses`, `expense_items`, `expense_item_splits`: trip members can SELECT/INSERT; UPDATE/DELETE allowed in casual mode for any member, including collaborative split edits, and in strict mode only for the creator or owner.
 - `audit_log`: members can SELECT for their trips; INSERT only via server-side function.
 - `settlements`: members can SELECT; INSERT/UPDATE only via server-side function.
 

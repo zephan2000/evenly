@@ -165,7 +165,7 @@ type SaveResponse =
   | { ok: true; expense_id: string }
   | { ok: false; error: string; detail?: string };
 
-type DeleteResponse = { ok: true; id: string } | { ok: false; error: string; detail?: string };
+type DeleteResponse = { ok: true } | { ok: false; error: string; detail?: string };
 
 export type SaveManualExpenseArgs = {
   tripId: string;
