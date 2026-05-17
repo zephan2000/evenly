@@ -156,21 +156,40 @@ export async function DELETE(request: Request) {
 
   const client = createUserClient(auth.jwt);
 
-  // Soft-delete via UPDATE. The expenses_update_trip_owner RLS policy gates
-  // write access to the trip's owner; non-owners match zero rows.
+  // Soft-delete must emit ZERO `RETURNING`. Any RETURNING — including the
+  // CTE PostgREST builds for `.select()` AND for `{ count: 'exact' }`
+  // (`WITH s AS (UPDATE ... RETURNING *) SELECT count(*) FROM s`) — makes
+  // Postgres re-apply the SELECT policy (expenses_select_trip_owner, which
+  // carries `deleted_at is null`) to the post-update row, which now has
+  // deleted_at set, raising "new row violates row-level security policy
+  // for table expenses" (500).
   //
-  // Do NOT add `.select()` here. `.select()` makes PostgREST append
-  // RETURNING, and Postgres then re-applies the SELECT policy
-  // (expenses_select_trip_owner, which carries `deleted_at is null`) to the
-  // *post-update* row — which now has deleted_at set — raising
-  // "new row violates row-level security policy for table expenses" (500).
-  // Instead we request an exact affected-row count with return=minimal (no
-  // RETURNING), so the SELECT policy is never applied to the soft-deleted
-  // row. Zero rows = 'not found or forbidden' (404) so we don't leak the
-  // presence of an expense the caller can't see.
-  const { count, error } = await client
+  // So: (1) a pre-check SELECT (gated by the same SELECT policy) decides
+  // not-found/forbidden — null for non-owners or already-deleted rows, so
+  // we don't leak presence — then (2) a bare UPDATE with no `.select()`
+  // and no count → PostgREST `return=minimal` → plain `UPDATE`, no
+  // RETURNING, SELECT policy never touches the soft-deleted row. A delete
+  // racing in between just no-ops the UPDATE; the outcome is still deleted.
+  const { data: target, error: findErr } = await client
     .from('expenses')
-    .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
+    .select('id')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (findErr) {
+    return Response.json(
+      { ok: false, error: 'delete_failed', detail: findErr.message },
+      { status: 500 },
+    );
+  }
+  if (!target) {
+    return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
+  }
+
+  const { error } = await client
+    .from('expenses')
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
     .is('deleted_at', null);
 
@@ -179,9 +198,6 @@ export async function DELETE(request: Request) {
       { ok: false, error: 'delete_failed', detail: error.message },
       { status: 500 },
     );
-  }
-  if (!count) {
-    return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
   }
 
   return Response.json({ ok: true }, { status: 200 });

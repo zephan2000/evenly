@@ -14,11 +14,13 @@
 --
 -- Note: this migration is NOT what fixed the soft-delete 500. That 500
 -- ("new row violates row-level security policy for table expenses") was
--- caused by the API handler using `UPDATE ... RETURNING` (PostgREST
--- `.select()`), which makes Postgres re-apply the SELECT policy
--- (expenses_select_trip_owner, which DOES carry `deleted_at is null`) to
--- the post-update row. That is fixed in api/expenses/[id].ts by requesting
--- an affected-row count with return=minimal instead of RETURNING the row.
+-- caused by the API handler emitting `RETURNING` — via PostgREST
+-- `.select()` AND via `{ count: 'exact' }` (PostgREST counts with
+-- `WITH s AS (UPDATE ... RETURNING *) SELECT count(*) FROM s`) — which
+-- makes Postgres re-apply the SELECT policy (expenses_select_trip_owner,
+-- which DOES carry `deleted_at is null`) to the post-update row. It is
+-- fixed in api/expenses/[id].ts with a pre-check SELECT plus a bare
+-- UPDATE (no .select(), no count → return=minimal, zero RETURNING).
 -- This migration is defence-in-depth + explicit intent only.
 
 drop policy if exists expenses_update_trip_owner on public.expenses;
