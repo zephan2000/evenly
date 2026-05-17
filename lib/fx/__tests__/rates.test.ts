@@ -27,34 +27,65 @@ describe('fetchFxRate', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('returns a fresh rate from frankfurter latest endpoint', async () => {
+  it('returns a fresh rate from the exchangerate-api latest endpoint', async () => {
     const fetchImpl = makeFetch((url) => {
-      expect(url).toContain('/latest?from=VND&to=SGD');
-      return { status: 200, body: { rates: { SGD: 0.0000537 } } };
+      expect(url).toContain('/v6/latest/VND');
+      return {
+        status: 200,
+        body: { result: 'success', base_code: 'VND', rates: { SGD: 0.0000537 } },
+      };
     });
     const result = await fetchFxRate('vnd', 'sgd', undefined, { fetchImpl });
     expect(result).toEqual({ rate: 0.0000537, status: 'fresh' });
   });
 
-  it('uses the date path when given a valid ISO date', async () => {
+  it('covers VND (the gap that motivated dropping frankfurter)', async () => {
     const fetchImpl = makeFetch((url) => {
-      expect(url).toContain('/2026-05-10?from=USD&to=SGD');
-      return { status: 200, body: { rates: { SGD: 1.35 } } };
+      expect(url).toContain('/v6/latest/SGD');
+      return {
+        status: 200,
+        body: { result: 'success', base_code: 'SGD', rates: { VND: 20421.46 } },
+      };
     });
-    const result = await fetchFxRate('USD', 'SGD', '2026-05-10', { fetchImpl });
-    expect(result.rate).toBe(1.35);
+    const result = await fetchFxRate('SGD', 'VND', undefined, { fetchImpl });
+    expect(result).toEqual({ rate: 20421.46, status: 'fresh' });
   });
 
-  it('throws unsupported_currency on 404', async () => {
-    const fetchImpl = makeFetch(() => ({ status: 404, body: { message: 'not found' } }));
+  it('free tier is latest-only: a dated request still returns the fresh latest rate', async () => {
+    const fetchImpl = makeFetch((url) => {
+      // No dated endpoint — always /latest/<BASE>, never a date path.
+      expect(url).toContain('/v6/latest/USD');
+      expect(url).not.toContain('2026-05-10');
+      return { status: 200, body: { result: 'success', base_code: 'USD', rates: { SGD: 1.35 } } };
+    });
+    const result = await fetchFxRate('USD', 'SGD', '2026-05-10', { fetchImpl });
+    expect(result).toEqual({ rate: 1.35, status: 'fresh' });
+  });
+
+  it('throws unsupported_currency on 404 (unknown base)', async () => {
+    const fetchImpl = makeFetch(() => ({ status: 404, body: { result: 'error' } }));
     await expect(fetchFxRate('XYZ', 'SGD', undefined, { fetchImpl })).rejects.toMatchObject({
       name: 'FxRateError',
       kind: 'unsupported_currency',
     });
   });
 
+  it('throws unsupported_currency on a typed error result (HTTP 200)', async () => {
+    const fetchImpl = makeFetch(() => ({
+      status: 200,
+      body: { result: 'error', 'error-type': 'unsupported-code' },
+    }));
+    await expect(fetchFxRate('USD', 'XYZ', undefined, { fetchImpl })).rejects.toMatchObject({
+      name: 'FxRateError',
+      kind: 'unsupported_currency',
+    });
+  });
+
   it('throws unsupported_currency when payload omits the target rate', async () => {
-    const fetchImpl = makeFetch(() => ({ status: 200, body: { rates: {} } }));
+    const fetchImpl = makeFetch(() => ({
+      status: 200,
+      body: { result: 'success', rates: {} },
+    }));
     await expect(fetchFxRate('USD', 'SGD', undefined, { fetchImpl })).rejects.toBeInstanceOf(
       FxRateError,
     );
@@ -77,24 +108,14 @@ describe('fetchFxRate', () => {
     });
   });
 
-  it('falls back from dated 404 to latest, returning stale', async () => {
-    // Out-of-range dated request — e.g. a future-dated receipt or a date
-    // before frankfurter's data range. We should fall through to /latest
-    // and tag the result as stale so the UI can flag it.
-    const fetchImpl = makeFetch((url) => {
-      if (url.includes('/2099-04-29')) return { status: 404, body: { message: 'not found' } };
-      if (url.includes('/latest')) return { status: 200, body: { rates: { SGD: 1.35 } } };
-      throw new Error(`unexpected fetch: ${url}`);
-    });
-    const result = await fetchFxRate('USD', 'SGD', '2099-04-29', { fetchImpl });
-    expect(result).toEqual({ rate: 1.35, status: 'stale' });
-  });
-
-  it('throws when both the dated request and the latest fallback 404', async () => {
-    const fetchImpl = makeFetch(() => ({ status: 404, body: { message: 'not found' } }));
-    await expect(fetchFxRate('XYZ', 'SGD', '2026-05-10', { fetchImpl })).rejects.toMatchObject({
-      name: 'FxRateError',
-      kind: 'unsupported_currency',
+  it('throws bad_payload on non-JSON 2xx', async () => {
+    const fetchImpl = (async () =>
+      new Response('<html>not json</html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      })) as unknown as typeof fetch;
+    await expect(fetchFxRate('USD', 'SGD', undefined, { fetchImpl })).rejects.toMatchObject({
+      kind: 'bad_payload',
     });
   });
 });

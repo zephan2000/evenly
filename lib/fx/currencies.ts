@@ -10,11 +10,12 @@
 // might plausibly encounter on a real receipt. We intentionally exclude
 // non-circulating funds (XAU, XAG, XBT) and many dual-issued legacy codes.
 //
-// Note on FX conversion: not every currency here has a frankfurter.app
-// rate. If the user picks one outside the supported set, the FX layer
-// falls back per ADR 0007. The picker doesn't gate on this — users
-// should be able to record the receipt currency truthfully even if the
-// settlement conversion is approximate.
+// Note on FX conversion: the FX layer (lib/fx/rates.ts) uses
+// ExchangeRate-API, which covers VND/THB/IDR/SGD and most active codes.
+// A code it doesn't price still records fine — the FX layer falls back
+// per ADR 0007. The picker doesn't gate on this; users should be able to
+// record the receipt currency truthfully even if the settlement
+// conversion is approximate.
 
 export type CurrencyEntry = {
   code: string;

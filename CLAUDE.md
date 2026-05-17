@@ -8,7 +8,7 @@ Zephan (`pergroup.sg@gmail.com`). Singapore-based. Solo builder.
 
 ## What this app does
 
-Users scan receipts (or use voice/manual entry), AI extracts a structured expense, then a guided wizard helps split items per person. Trips are owner-managed; members can join via share link without an account.
+Users scan receipts (or use voice/manual entry), AI extracts a structured expense, then a guided wizard helps split items per person. Splitting is expense-level attribution; settlement is the later trip-level recomputation/output of those splits. Trips are owner-managed; members can join via share link without an account.
 
 ## Stack (locked)
 
@@ -16,7 +16,7 @@ Users scan receipts (or use voice/manual entry), AI extracts a structured expens
 - **Backend:** Supabase (Postgres, Storage for receipt images, RLS).
 - **Auth:** Clerk (owner only; members can be anonymous). Wired to Supabase RLS via Clerk JWT.
 - **Vision/AI:** Gemini 2.0 Flash (free tier, primary). Qwen2.5-VL via Hyperbolic/OpenRouter (fallback).
-- **FX rates:** frankfurter.app (free, ECB-backed).
+- **FX rates:** ExchangeRate-API (`open.er-api.com`, free, no key; covers VND/SE-Asia). Frankfurter dropped — no VND coverage. See ADR 0007.
 - **Hosting:** Vercel (web) + Expo Application Services (mobile builds).
 
 ## MVP scope
@@ -30,6 +30,7 @@ Users scan receipts (or use voice/manual entry), AI extracts a structured expens
 - GST handling (inclusive/exclusive classification)
 - Settlement view (simplify debts)
 - Trip share via link (anonymous members allowed)
+- Casual-mode collaborative split editing with audit attribution
 
 **Out of scope for MVP:**
 
@@ -165,6 +166,8 @@ These are settled. If you think one is wrong, raise it explicitly with the user;
 4. Share sets are trip-scoped, not nested groups (see `0004`)
 5. AI classifies GST mode before extracting values (see `0005`)
 6. FX snapshots at expense time, not settlement time (see `0007`)
+7. Splitting defaults to `all members`; AI suggestions are opt-in and resettable
+8. Spotlight wizard collapse is based on available rendered width, not a fixed device class
 
 ## Privacy / safety constraints
 

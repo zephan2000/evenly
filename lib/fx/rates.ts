@@ -1,19 +1,32 @@
 // Server-only. Do not import from client components or screens.
-// Fetches FX rates from frankfurter.app (ECB-backed, free, no key) for the
-// per-expense snapshot policy laid out in ADR 0007.
+// Fetches FX rates from ExchangeRate-API's free, no-key "open" endpoint
+// (https://open.er-api.com/v6/latest/<BASE>) for the per-expense snapshot
+// policy in ADR 0007.
+//
+// Replaced frankfurter.app: it does NOT cover VND (Vietnamese đồng) — a
+// primary SE-Asia trip currency — which forced the rate=1 stale fallback
+// (no conversion at all). ExchangeRate-API covers VND/THB/IDR/SGD+. See
+// ADR 0007 "Provider note (2026-05-18)".
 //
 // Contract:
 //   - Same-currency calls short-circuit to { rate: 1, status: 'fresh' }.
-//   - A successful HTTP response with a numeric rate in the payload yields
-//     { rate, status: 'fresh' }.
-//   - Frankfurter doesn't cover every currency (VND is supported; some
-//     long-tails are not). On a 404 or missing rate we throw a typed
-//     `FxRateError`. Callers downgrade to { rate: 1, status: 'stale' } so the
-//     row still saves and the issue is surfaced as a refresh later (see ADR
-//     0007 §"API failure handling"). We deliberately do NOT swallow the error
-//     here — callers want to log it.
+//   - A successful response with a numeric rate yields { rate, status:
+//     'fresh' }. The free tier is LATEST-ONLY (no historical endpoint),
+//     so a backdated expense is snapshotted at the *current* rate, not the
+//     exact expense-date rate. We deliberately still return 'fresh' (never
+//     'stale') on success: the caller (api/expenses.ts:resolveFxSnapshot)
+//     treats `status === 'stale'` as "rate unreliable — do NOT convert"
+//     (home_amount = original_amount). A real fetched rate MUST be 'fresh'
+//     or it would be discarded and the VND bug would persist. Exact
+//     historical-date fidelity needs the keyed Pro endpoint — a future
+//     money decision, see ADR 0007.
+//   - Unsupported currency / missing rate / typed API error → a typed
+//     `FxRateError`. Callers downgrade to { rate: 1, status: 'stale' }
+//     (the only 'stale' source now) so the row still saves and a refresh
+//     job can fix it later (ADR 0007 §"API failure handling"). We do NOT
+//     swallow the error here — callers want to log it.
 
-const FRANKFURTER_BASE = 'https://api.frankfurter.app';
+const EXRATE_BASE = 'https://open.er-api.com/v6';
 
 export type FxRateStatus = 'fresh' | 'stale';
 
@@ -23,7 +36,7 @@ export type FxRateResult = {
 };
 
 export type FxRateErrorKind =
-  | 'unsupported_currency' // 404 or rate missing from payload
+  | 'unsupported_currency' // 404, typed API error, or rate missing from payload
   | 'transient' // network blip or 5xx
   | 'bad_payload'; // 2xx with shape we don't understand
 
@@ -47,10 +60,14 @@ function normalizeCode(code: string): string {
 }
 
 /**
- * Fetch the FX rate from `from` to `to`. `date` (ISO `YYYY-MM-DD`) requests a
- * historical rate; omit it for the latest published rate. Frankfurter ECB
- * rates are published once per business day; weekend dates resolve to the
- * preceding Friday's rate, which is what we want for an expense snapshot.
+ * Fetch the FX rate from `from` to `to`.
+ *
+ * `date` (ISO `YYYY-MM-DD`) is accepted for interface stability and a
+ * future keyed-historical path, but the free ExchangeRate-API endpoint is
+ * latest-only — the snapshot uses the current published rate regardless of
+ * `date`. For same-day expenses (the common case in a trip app) that is
+ * the correct expense-time rate; backdated expenses get an approximate
+ * (current) rate. See ADR 0007.
  *
  * Throws `FxRateError` for unsupported currencies, transient failures, and
  * unrecognized payloads. Callers should decide whether to fall back to
@@ -68,47 +85,29 @@ export async function fetchFxRate(
     return { rate: 1, status: 'fresh' };
   }
 
+  // Free tier is latest-only; `date` does not change the lookup. Referenced
+  // so the intentional non-use is explicit (and lint-clean).
+  void date;
+
   const fetchFn = opts.fetchImpl ?? fetch;
-  const hasDate = !!date && /^\d{4}-\d{2}-\d{2}$/.test(date);
-
-  // Try the dated endpoint first when a date is provided. Frankfurter 404s
-  // when the date is outside its data range (e.g. future-dated receipts, or
-  // pre-1999); for that case we fall through to `latest` rather than giving
-  // up — a stale-by-a-few-days rate is much better for the user than no
-  // rate at all + the decimal-shift inflation that comes from rate=1
-  // fallback (see the convertMinorUnits trap in app/api/expenses+api.ts).
-  if (hasDate) {
-    const r = await tryFetch(fetchFn, date as string, fromCode, toCode);
-    if (r.kind === 'rate') return { rate: r.rate, status: 'fresh' };
-    // 404 on the dated request → fall through to latest. Any other error
-    // (transient, bad_payload, unsupported with a non-404 200 response)
-    // throws now since latest probably won't help and we want callers to
-    // log it.
-    if (r.kind !== 'date_out_of_range') throw r.error;
-  }
-
-  const r = await tryFetch(fetchFn, 'latest', fromCode, toCode);
+  const r = await tryFetch(fetchFn, fromCode, toCode);
   if (r.kind === 'rate') {
-    // Tag as fresh if no date was requested; stale if we fell back from a
-    // dated request — UI can use this to show a tiny "rate-from-today"
-    // tooltip on backdated expenses.
-    return { rate: r.rate, status: hasDate ? 'stale' : 'fresh' };
+    return { rate: r.rate, status: 'fresh' };
   }
   throw r.error;
 }
 
-type TryFetchResult =
-  | { kind: 'rate'; rate: number }
-  | { kind: 'date_out_of_range'; error: FxRateError }
-  | { kind: 'error'; error: FxRateError };
+type TryFetchResult = { kind: 'rate'; rate: number } | { kind: 'error'; error: FxRateError };
 
 async function tryFetch(
   fetchFn: typeof fetch,
-  path: string,
   fromCode: string,
   toCode: string,
 ): Promise<TryFetchResult> {
-  const url = `${FRANKFURTER_BASE}/${path}?from=${encodeURIComponent(fromCode)}&to=${encodeURIComponent(toCode)}`;
+  // open.er-api.com/v6/latest/<BASE> returns { result, base_code, rates }.
+  // rates maps every supported code → units of <code> per 1 <BASE>, so the
+  // from->to rate is rates[toCode].
+  const url = `${EXRATE_BASE}/latest/${encodeURIComponent(fromCode)}`;
   let resp: Response;
   try {
     resp = await fetchFn(url, { method: 'GET' });
@@ -120,22 +119,20 @@ async function tryFetch(
   }
 
   if (resp.status === 404) {
-    // Frankfurter returns 404 for both unsupported currency pairs AND for
-    // dates outside its data range. We can't easily tell apart from the
-    // response, so when we got here from a dated request we let the caller
-    // retry with latest; when we got here from `latest` itself, it's truly
-    // unsupported.
-    const error = new FxRateError(
-      'unsupported_currency',
-      `frankfurter 404 for ${fromCode}->${toCode} (${path})`,
-      404,
-    );
-    return { kind: path === 'latest' ? 'error' : 'date_out_of_range', error };
+    // Unknown/unsupported base currency in the path.
+    return {
+      kind: 'error',
+      error: new FxRateError(
+        'unsupported_currency',
+        `exchangerate-api 404 for base ${fromCode}`,
+        404,
+      ),
+    };
   }
   if (!resp.ok) {
     return {
       kind: 'error',
-      error: new FxRateError('transient', `frankfurter status ${resp.status}`, resp.status),
+      error: new FxRateError('transient', `exchangerate-api status ${resp.status}`, resp.status),
     };
   }
 
@@ -145,7 +142,20 @@ async function tryFetch(
   } catch (cause) {
     return {
       kind: 'error',
-      error: new FxRateError('bad_payload', `frankfurter bad json: ${String(cause)}`),
+      error: new FxRateError('bad_payload', `exchangerate-api bad json: ${String(cause)}`),
+    };
+  }
+
+  // The open endpoint signals bad/unsupported codes with
+  // { result: "error", "error-type": "unsupported-code" | ... }, sometimes
+  // with HTTP 200. Treat any non-success result as unsupported.
+  if (isErrorResult(payload)) {
+    return {
+      kind: 'error',
+      error: new FxRateError(
+        'unsupported_currency',
+        `exchangerate-api error for ${fromCode}: ${errorType(payload)}`,
+      ),
     };
   }
 
@@ -155,11 +165,23 @@ async function tryFetch(
       kind: 'error',
       error: new FxRateError(
         'unsupported_currency',
-        `frankfurter response missing ${toCode} rate for ${fromCode}`,
+        `exchangerate-api response missing ${toCode} rate for ${fromCode}`,
       ),
     };
   }
   return { kind: 'rate', rate };
+}
+
+function isErrorResult(payload: unknown): boolean {
+  return (
+    !!payload && typeof payload === 'object' && (payload as { result?: unknown }).result === 'error'
+  );
+}
+
+function errorType(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return 'unknown';
+  const e = (payload as Record<string, unknown>)['error-type'];
+  return typeof e === 'string' ? e : 'unknown';
 }
 
 function readRate(payload: unknown, toCode: string): number | null {

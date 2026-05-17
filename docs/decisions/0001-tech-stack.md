@@ -12,7 +12,7 @@ Evenly is a mobile-first expense-tracking app with web parity. Solo builder, pre
 - **Backend:** Supabase (Postgres, Storage, RLS).
 - **Auth:** Clerk (free tier 10k MAU, better DX than Supabase Auth alone). Wired to Supabase via Clerk-issued JWT.
 - **AI:** Hosted APIs (Gemini Flash, with fallbacks). Vercel cannot self-host vision models in serverless.
-- **FX rates:** frankfurter.app (free, no key, ECB-backed).
+- **FX rates:** ExchangeRate-API `open.er-api.com` (free, no key). Superseded frankfurter.app (ECB-backed but no VND); see ADR 0007 "Provider note (2026-05-18)".
 - **Web hosting:** Vercel. Expo Router exports a static web build that Vercel handles natively.
 - **Mobile builds:** EAS Build when needed.
 

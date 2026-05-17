@@ -35,3 +35,13 @@ When the FX API (frankfurter.app) is unreachable:
 - Settlement view is computed from `home_amount`, so stale rates can produce slightly wrong settlements until refreshed.
 - Historical accuracy: a settlement for a year-old trip uses the rates that applied then, not today's. This is the intended behavior.
 - Multi-currency trips (e.g., SG → JP → TH) work cleanly: each expense knows its origin currency and locked rate.
+
+## Provider note (2026-05-18)
+
+FX provider changed **frankfurter.app → ExchangeRate-API** (`open.er-api.com/v6/latest/<BASE>`, free, no key). Reason: Frankfurter (ECB-backed) does **not** publish VND (Vietnamese đồng) — a primary SE-Asia trip currency — so every VND expense hit the `rate=1` stale fallback (no conversion, only decimal-shift avoidance). ExchangeRate-API covers VND/THB/IDR/SGD and ~160 codes. Verified live; no new npm dependency (a `fetch` URL/parse change inside `lib/fx/rates.ts`); public surface (`fetchFxRate`, `FxRateError`, `FxRateStatus`) unchanged so `api/expenses.ts` and the DB RPC are untouched.
+
+**Latest-only limitation (accepted):** the free no-key endpoint has no historical/as-of-date endpoint. A backdated expense is snapshotted at the **current** rate, not the exact expense-date rate. Same-day expenses (the dominant case for a trip app logged as you go) are therefore correct; backdated ones are approximate. A successful fetch is tagged `fresh` (not `stale`) **on purpose**: `api/expenses.ts:resolveFxSnapshot` treats `status === 'stale'` as "rate unreliable — do not convert" (`home_amount = original_amount`), so a real fetched rate must be `fresh` or it would be discarded and the VND gap would persist. `stale` now has exactly one source: the error/exception fallback (`rate = 1`).
+
+**Path to full historical fidelity (deferred, money decision):** ExchangeRate-API's keyed Pro plan (~USD 10/mo) has a true `history/<BASE>/<Y>/<M>/<D>` endpoint. If exact backdated accuracy is needed, add a server-only `FX_API_KEY` env var and a keyed dated branch in `lib/fx/rates.ts` (the function signature already carries `date`). Not done now — out of MVP scope.
+
+**ToS obligation (tracked, post-MVP):** ExchangeRate-API's free terms permit commercial convert-and-cache but **forbid redistribution** and require a visible "Rates By Exchange Rate API" attribution link (e.g., a Settings/About line). Low effort; tracked as a post-MVP polish item.
