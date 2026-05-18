@@ -4,10 +4,10 @@
 // reviewed/edited in capture order. Single tray-level Save action; flagged
 // review is an exception path, not the default.
 //
-// This is the M1.5 functional mockup — behavior + structure correct, visual
-// skin handed off to Codex. The OS picker is stubbed via a "Start demo
-// batch" CTA; real expo-image-picker integration replaces that stub when
-// the home screen wires the entry point.
+// Production path: real expo-image-picker (lib/quick-capture/picker.ts)
+// feeds the real orchestrator (upload → AI extract → save via
+// /api/expenses). No demo/mock path — retries go through the real
+// orchestrator primitives.
 
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,8 +60,6 @@ import {
   readyDraftCount,
   savedDraftCount,
 } from '@/lib/quick-capture/state';
-
-// ─── Mock data for the demo flow ─────────────────────────────────────────
 
 // ─── Trips fetch state ───────────────────────────────────────────────────
 
