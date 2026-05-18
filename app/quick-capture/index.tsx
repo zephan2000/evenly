@@ -39,7 +39,14 @@ import { listTripMembers, type TripMember } from '@/lib/db/trip-members';
 import { createTripWithMembers, listTrips, type TripRecord } from '@/lib/db/trips';
 import { useQuickCaptureDispatch, useQuickCaptureState } from '@/lib/quick-capture/context';
 import { createRealDeps } from '@/lib/quick-capture/deps';
-import { runExtractions, runSaves, runUploads } from '@/lib/quick-capture/orchestrator';
+import {
+  retryExtraction,
+  retrySave,
+  retryUpload,
+  runExtractions,
+  runSaves,
+  runUploads,
+} from '@/lib/quick-capture/orchestrator';
 import { setCurrentTripId } from '@/lib/storage/current-trip';
 import { pickReceiptImages } from '@/lib/quick-capture/picker';
 import {
@@ -56,27 +63,6 @@ import {
 
 // ─── Mock data for the demo flow ─────────────────────────────────────────
 
-// Synthetic placeholder trip used only by the demo-batch simulator (visual
-// review path). Real picker batches always use a fetched TripRecord.
-const DEMO_PLACEHOLDER_TRIP: TripSummary = { id: 'demo-trip', name: 'Demo trip' };
-
-const MOCK_EXTRACTED: ExtractedExpense = {
-  merchant: 'Hawker Heaven',
-  expense_date: '2026-04-23',
-  currency: 'SGD',
-  tax_mode: 'exclusive',
-  tax_label: 'GST',
-  items: [{ name: 'Chicken Rice', quantity: 2, unit_amount_cents: 600, amount_cents: 1200 }],
-  subtotal_cents: 1200,
-  service_charge_cents: 120,
-  tip_cents: 0,
-  tax_amount_cents: 106,
-  total_cents: 1426,
-  category_guess: 'meals',
-  confidence: { overall: 0.92, items: 0.9, totals: 0.95 },
-  notes: '',
-};
-
 // ─── Trips fetch state ───────────────────────────────────────────────────
 
 type TripsState =
@@ -90,15 +76,6 @@ type TripPickerState =
   | { kind: 'closed' }
   | { kind: 'batch' }
   | { kind: 'single_card'; draftId: string };
-
-// Demo-batch URIs are placeholder URLs; real picker output is local file:// or
-// http(s)://. We gate the in-memory simulator on this prefix so real batches
-// run through the actual orchestrator instead.
-const DEMO_URI_PREFIX = 'https://placehold.co';
-
-function isDemoDraft(d: DraftExpense): boolean {
-  return d.imageUri.startsWith(DEMO_URI_PREFIX);
-}
 
 export default function QuickCaptureTrayScreen() {
   const router = useRouter();
@@ -159,9 +136,7 @@ export default function QuickCaptureTrayScreen() {
   const currentTrip = trips[0] ?? null;
 
   const tripById = useMemo(() => {
-    const acc: Record<string, TripSummary> = {
-      [DEMO_PLACEHOLDER_TRIP.id]: DEMO_PLACEHOLDER_TRIP,
-    };
+    const acc: Record<string, TripSummary> = {};
     for (const t of trips) acc[t.id] = { id: t.id, name: t.name };
     return acc;
   }, [trips]);
@@ -251,7 +226,7 @@ export default function QuickCaptureTrayScreen() {
   const saved = savedDraftCount(state);
   const allSaved = visibleDrafts.length > 0 && isBatchTerminal(state) && saved > 0;
 
-  const isRealBatch = visibleDrafts.length > 0 && !isDemoDraft(visibleDrafts[0]);
+  const isRealBatch = visibleDrafts.length > 0;
 
   // Real orchestrator deps. Created lazily — null until we have a signed-in
   // session, a fetched trip, and a real (non-demo) batch. saveContext uses
@@ -374,86 +349,6 @@ export default function QuickCaptureTrayScreen() {
     });
   }, [router, currentTrip]);
 
-  // ─── Demo-batch initializer (visual review only) ───────────────────────
-  const seedDemoBatch = useCallback(() => {
-    const id = (n: number) => `demo-${Date.now()}-${n}`;
-    const now = new Date().toISOString();
-    dispatch({
-      type: 'INIT_BATCH',
-      batchId: `batch-${Date.now()}`,
-      defaultTripId: currentTrip?.id ?? DEMO_PLACEHOLDER_TRIP.id,
-      images: Array.from({ length: 6 }, (_, i) => ({
-        id: id(i),
-        imageUri: `${DEMO_URI_PREFIX}/200x260/F4F9FF/16233B?text=Receipt`,
-      })),
-      createdAt: now,
-    });
-  }, [currentTrip]);
-
-  // Demo-only simulator — drives a fake orchestration so the placeholder
-  // batch progresses through states for visual review. Gated on the
-  // demo-uri prefix so real picker batches go through the orchestrator
-  // effects above instead.
-  useEffect(() => {
-    if (state.drafts.length === 0) return;
-    if (!isDemoDraft(state.drafts[0])) return;
-
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    state.drafts.forEach((d, idx) => {
-      if (d.status !== 'pending_upload') return;
-      const isFailureCase = idx === 4;
-      const isLowConf = idx === 2;
-      const uploadDelay = 600 + idx * 120;
-      const extractDelay = uploadDelay + 1200 + idx * 80;
-
-      timers.push(setTimeout(() => dispatch({ type: 'UPLOAD_STARTED', draftId: d.id }), 200));
-      timers.push(
-        setTimeout(() => {
-          if (isFailureCase) {
-            dispatch({
-              type: 'UPLOAD_FAILED',
-              draftId: d.id,
-              error: { code: 'NET', message: 'Network timed out' },
-            });
-          } else {
-            dispatch({ type: 'UPLOAD_SUCCEEDED', draftId: d.id, uploadedKey: `key-${d.id}` });
-          }
-        }, uploadDelay),
-      );
-      timers.push(
-        setTimeout(() => {
-          if (isFailureCase) return;
-          if (isLowConf) {
-            dispatch({
-              type: 'EXTRACT_SUCCEEDED',
-              draftId: d.id,
-              extracted: {
-                ...MOCK_EXTRACTED,
-                merchant: 'Roadside cafe',
-                total_cents: 880,
-                confidence: { overall: 0.5, items: 0.5, totals: 0.55 },
-              },
-            });
-          } else {
-            dispatch({
-              type: 'EXTRACT_SUCCEEDED',
-              draftId: d.id,
-              extracted: {
-                ...MOCK_EXTRACTED,
-                merchant: idx === 0 ? 'Hawker Heaven' : `Receipt ${idx + 1}`,
-                total_cents: 1426 + idx * 530,
-              },
-            });
-          }
-        }, extractDelay),
-      );
-    });
-    return () => timers.forEach(clearTimeout);
-    // We intentionally only re-fire when the draft count changes — mutations
-    // inside drafts shouldn't restart the simulator.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.drafts.length]);
-
   // ─── Card interaction handlers ─────────────────────────────────────────
 
   const handleToggleExpand = useCallback((draftId: string) => {
@@ -476,43 +371,42 @@ export default function QuickCaptureTrayScreen() {
     [router],
   );
 
-  const handleRetryUpload = useCallback((draftId: string) => {
-    // Mock retry — flips the demo failure case to a successful upload.
-    dispatch({ type: 'UPLOAD_STARTED', draftId });
-    setTimeout(() => {
-      dispatch({ type: 'UPLOAD_SUCCEEDED', draftId, uploadedKey: `key-${draftId}` });
-      setTimeout(() => {
-        dispatch({
-          type: 'EXTRACT_SUCCEEDED',
-          draftId,
-          extracted: { ...MOCK_EXTRACTED, merchant: 'Recovered receipt' },
-        });
-      }, 800);
-    }, 600);
-  }, []);
+  // Real retries via the orchestrator (same DI as runUploads/Extractions/
+  // Saves). Previously these were mocks that fabricated MOCK_EXTRACTED /
+  // faked SAVE_SUCCEEDED — i.e. retrying a failed real receipt produced a
+  // bogus expense or a silent no-op in production.
+  const handleRetryUpload = useCallback(
+    (draftId: string) => {
+      if (!realDeps) return;
+      const draft = state.drafts.find((d) => d.id === draftId);
+      if (draft) void retryUpload(draft, dispatch, realDeps);
+    },
+    [state.drafts, realDeps],
+  );
 
-  const handleRetryExtraction = useCallback((draftId: string) => {
-    dispatch({ type: 'EXTRACT_STARTED', draftId });
-    setTimeout(() => {
-      dispatch({
-        type: 'EXTRACT_SUCCEEDED',
-        draftId,
-        extracted: { ...MOCK_EXTRACTED, merchant: 'Re-extracted receipt' },
-      });
-    }, 900);
-  }, []);
+  const handleRetryExtraction = useCallback(
+    (draftId: string) => {
+      if (!realDeps) return;
+      const draft = state.drafts.find((d) => d.id === draftId);
+      if (draft) void retryExtraction(draft, dispatch, realDeps);
+    },
+    [state.drafts, realDeps],
+  );
 
-  const handleRetrySave = useCallback((draftId: string) => {
-    dispatch({ type: 'SAVE_STARTED', draftId });
-    setTimeout(() => {
-      dispatch({ type: 'SAVE_SUCCEEDED', draftId, expenseId: `exp-${draftId}` });
-    }, 700);
-  }, []);
+  const handleRetrySave = useCallback(
+    (draftId: string) => {
+      if (!realDeps) return;
+      const draft = state.drafts.find((d) => d.id === draftId);
+      if (draft) void retrySave(draft, dispatch, realDeps);
+    },
+    [state.drafts, realDeps],
+  );
 
   const handleRePick = useCallback(
     (draftId: string) => {
-      // Real impl: open OS picker for one image, replace this draft's imageUri.
-      // Mock: just discard.
+      // Single-image in-place re-pick isn't built yet; discarding the draft
+      // lets the user re-capture it via "Pick receipts". Honest no-data
+      // behavior (no fabricated content).
       handleDiscardDraft(draftId);
     },
     [handleDiscardDraft],
@@ -567,31 +461,26 @@ export default function QuickCaptureTrayScreen() {
 
   // ─── Footer actions ────────────────────────────────────────────────────
 
-  const handleSaveReceipts = useCallback(() => {
-    if (ready === 0) return;
-    saveAllConfirmRef.current?.present();
-  }, [ready]);
-
   const performBulkSave = useCallback(() => {
     saveAllConfirmRef.current?.dismiss();
-    if (realDeps) {
-      // Real batch: orchestrator dispatches SAVE_STARTED / SAVE_SUCCEEDED /
-      // SAVE_FAILED for each ready+unreviewed draft and round-trips through
-      // /api/expenses (createUserClient → save_expense_with_items RPC).
-      void runSaves(state, dispatch, realDeps);
+    if (!realDeps) return;
+    // Orchestrator dispatches SAVE_STARTED / SAVE_SUCCEEDED / SAVE_FAILED
+    // per ready+unreviewed draft and round-trips through /api/expenses
+    // (createUserClient → save_expense_with_items RPC).
+    void runSaves(state, dispatch, realDeps);
+  }, [state, realDeps, dispatch]);
+
+  const handleSaveReceipts = useCallback(() => {
+    if (ready === 0) return;
+    // The confirm sheet only earns its place when something is flagged (it
+    // warns flagged receipts stay in the inbox + offers Review). With
+    // nothing flagged it's pure friction — save directly.
+    if (flagged === 0) {
+      performBulkSave();
       return;
     }
-    // Demo batch: keep the in-memory simulator so visual review still
-    // exercises the save UI without auth or a real Supabase row.
-    state.drafts.forEach((d) => {
-      if (d.status !== 'ready' || d.reviewState !== 'none') return;
-      dispatch({ type: 'SAVE_STARTED', draftId: d.id });
-      setTimeout(
-        () => dispatch({ type: 'SAVE_SUCCEEDED', draftId: d.id, expenseId: `exp-${d.id}` }),
-        600 + Math.random() * 600,
-      );
-    });
-  }, [state, realDeps, dispatch]);
+    saveAllConfirmRef.current?.present();
+  }, [ready, flagged, performBulkSave]);
 
   const handleReviewFlagged = useCallback(() => {
     saveAllConfirmRef.current?.dismiss();
@@ -672,11 +561,6 @@ export default function QuickCaptureTrayScreen() {
               cta={{ label: 'Pick receipts', onPress: handlePickReceipts }}
             />
           )}
-          {tripsState.kind === 'ready' ? (
-            <View style={styles.emptySecondary}>
-              <Button label="Start demo batch" variant="ghost" size="sm" onPress={seedDemoBatch} />
-            </View>
-          ) : null}
         </ScrollView>
         <CreateTripSheet
           ref={createTripSheetRef}
