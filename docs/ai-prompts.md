@@ -4,7 +4,7 @@ Authoritative source for every prompt sent to Gemini (or fallback). When you cha
 
 ## Provider chain
 
-1. **Primary:** Gemini 2.0 Flash via OpenRouter (`google/gemini-2.0-flash-exp`). Single SDK + single API key (`OPENROUTER_API_KEY`). Google's upstream free-tier limit (1500 req/day) is enforced through OpenRouter.
+1. **Primary:** Gemini 2.0 Flash via OpenRouter (`google/gemini-2.0-flash-001`). Single SDK + single API key (`OPENROUTER_API_KEY`). Low-cost paid model billed via OpenRouter credit (~fractions of a cent per receipt). NOTE: the old `google/gemini-2.0-flash-exp` (free, experimental) was **retired by OpenRouter** (404 "No endpoints found"), which silently broke all extraction — use the GA `-001` id, never `-exp`.
 2. **Fallback:** Qwen2.5-VL-72B via OpenRouter (`qwen/qwen2.5-vl-72b-instruct`). Triggered on rate limit (429) or 5xx after 1 retry.
 3. **Last resort:** Surface error to user with "AI extraction unavailable, please enter manually."
 
@@ -90,6 +90,7 @@ When you change a prompt:
 - **2026-05-03** — Initial prompt drafted. Covers SG GST inclusive/exclusive classification + multi-currency.
 - **2026-05-04** — Parser now collapses `tax_mode = "none"` → `"inclusive"` with `tax_amount_cents = 0` before persisting, so the DB enum stays two-valued (`inclusive | exclusive`). Added explicit SG GST default rate (9%) for inclusive-mode embedded-tax math when no rate is stated.
 - **2026-05-04** — Provider chain now routes Gemini Flash through OpenRouter (was direct Google AI Studio API). See ADR 0002 revision for rationale and the single-provider-failure tradeoff.
+- **2026-05-18** — Primary model id `google/gemini-2.0-flash-exp` → `google/gemini-2.0-flash-001`. OpenRouter retired the experimental model (404 "No endpoints found"); extraction had been silently failing in prod (upload 200, `/api/extract` 502, draft → "Couldn't read this receipt", nothing saved). Also fixed `lib/ai/extract.ts` `tryProvider` mislabeling a fatal 4xx as `transient`, which masked the dead model as a generic `provider_unavailable`/429; a fatal primary now falls through to the fallback and the real `lastStatus` is surfaced. No prompt/schema change.
 
 ## Testing
 

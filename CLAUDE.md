@@ -15,7 +15,7 @@ Users scan receipts (or use voice/manual entry), AI extracts a structured expens
 - **Frontend:** Expo SDK 54 + Expo Router 6, TypeScript strict, React 19. Mobile-first, exports to web for Vercel.
 - **Backend:** Supabase (Postgres, Storage for receipt images, RLS).
 - **Auth:** Clerk (owner only; members can be anonymous). Wired to Supabase RLS via Clerk JWT.
-- **Vision/AI:** Gemini 2.0 Flash (free tier, primary). Qwen2.5-VL via Hyperbolic/OpenRouter (fallback).
+- **Vision/AI:** Gemini 2.0 Flash via OpenRouter (`google/gemini-2.0-flash-001`, low-cost paid — the free `-exp` model was retired; see ADR 0002 rev 2026-05-18), primary. Qwen2.5-VL via OpenRouter (fallback).
 - **FX rates:** ExchangeRate-API (`open.er-api.com`, free, no key; covers VND/SE-Asia). Frankfurter dropped — no VND coverage. See ADR 0007.
 - **Hosting:** Vercel (web) + Expo Application Services (mobile builds).
 

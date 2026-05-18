@@ -8,7 +8,10 @@ import {
   type PersistedExpense,
 } from './schema';
 
-const PRIMARY_MODEL = 'google/gemini-2.0-flash-exp';
+// google/gemini-2.0-flash-exp was retired by OpenRouter (returns 404 "No
+// endpoints found"), which silently broke all extraction. -001 is the GA
+// id of the same Gemini 2.0 Flash model (ADR 0002); verified live.
+const PRIMARY_MODEL = 'google/gemini-2.0-flash-001';
 const FALLBACK_MODEL = 'qwen/qwen2.5-vl-72b-instruct';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -77,13 +80,16 @@ export async function extractReceipt(
 
   const primary = await tryProvider(PRIMARY_MODEL, input.imageDataUrl, apiKey, fetchFn, 1);
   if (primary.ok) return { ok: true, value: postProcess(primary.value) };
-  if (primary.error.kind !== 'transient') {
+  // parse/schema = the model answered but badly → terminal, no fallback.
+  // transient/fatal (incl. a 404 dead model) → try the fallback so a
+  // retired primary id can't take extraction down on its own.
+  if (primary.error.kind === 'parse' || primary.error.kind === 'schema') {
     return mapTerminalError(primary.error, PRIMARY_MODEL);
   }
 
   const fallback = await tryProvider(FALLBACK_MODEL, input.imageDataUrl, apiKey, fetchFn, 0);
   if (fallback.ok) return { ok: true, value: postProcess(fallback.value) };
-  if (fallback.error.kind !== 'transient') {
+  if (fallback.error.kind === 'parse' || fallback.error.kind === 'schema') {
     return mapTerminalError(fallback.error, FALLBACK_MODEL);
   }
 
@@ -99,7 +105,8 @@ export async function extractReceipt(
 }
 
 type ProviderAttemptError =
-  | { kind: 'transient'; status: number }
+  | { kind: 'transient'; status: number } // 429/5xx — retry, then try fallback
+  | { kind: 'fatal'; status: number } // 4xx (404 dead model, 401, 400) — try fallback, don't retry
   | { kind: 'parse'; raw: string }
   | { kind: 'schema'; issues: unknown };
 
@@ -121,7 +128,11 @@ async function tryProvider(
       attempt++;
       continue;
     }
-    return { ok: false, error: { kind: 'transient', status: resp.status } };
+    // Preserve the real failure kind. Previously this always returned
+    // 'transient', so a fatal 404 (retired model id) was mislabeled and
+    // surfaced as a generic provider_unavailable/429 — masking the true
+    // cause for a long time.
+    return { ok: false, error: { kind: resp.kind, status: resp.status } };
   }
 }
 
@@ -196,7 +207,7 @@ function parseAndValidate(raw: string): Result<ExtractedExpense, ProviderAttempt
   return { ok: true, value: result.data };
 }
 
-type TerminalAttemptError = Exclude<ProviderAttemptError, { kind: 'transient' }>;
+type TerminalAttemptError = Extract<ProviderAttemptError, { kind: 'parse' } | { kind: 'schema' }>;
 
 function mapTerminalError(
   err: TerminalAttemptError,

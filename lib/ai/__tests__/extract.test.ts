@@ -78,6 +78,37 @@ describe('extractReceipt', () => {
     expect(result.error.kind).toBe('provider_unavailable');
   });
 
+  it('falls back to the secondary model when the primary id is retired (404 fatal)', async () => {
+    // Regression: google/gemini-2.0-flash-exp was removed from OpenRouter
+    // (404 "No endpoints found"). A fatal 404 on the primary must not be
+    // retried and must fall through to the fallback, not take extraction down.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(mockTransientResponse(404))
+      .mockResolvedValueOnce(mockJsonResponse(sgGstExclusive));
+    const result = await extractReceipt({
+      imageDataUrl: 'data:image/png;base64,xxx',
+      apiKey: 'test-key',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // primary 404 (no retry) + fallback
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns provider_unavailable when both model ids are dead (404)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(mockTransientResponse(404));
+    const result = await extractReceipt({
+      imageDataUrl: 'data:image/png;base64,xxx',
+      apiKey: 'test-key',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('provider_unavailable');
+    if (result.error.kind !== 'provider_unavailable') return;
+    expect(result.error.lastStatus).toBe(404); // real cause surfaced, not masked as 429
+  });
+
   it('returns missing_api_key when no key is provided and env is empty', async () => {
     const original = process.env.OPENROUTER_API_KEY;
     delete process.env.OPENROUTER_API_KEY;

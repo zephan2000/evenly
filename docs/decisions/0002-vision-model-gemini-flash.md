@@ -53,3 +53,11 @@ We now access Gemini 2.0 Flash via **OpenRouter** instead of the direct Google A
 - Single point of failure noted above; revisit if outages become user-visible.
 - If we ever need fully on-device extraction (privacy, offline), Qwen2.5-VL-7B compiled to MLC or ONNX is the path — not Gemini.
 - We track OpenRouter usage to warn before any per-key limits bite (Gemini's free-tier 1500/day is enforced upstream by Google through OpenRouter).
+
+## Revision — 2026-05-18: model id retired; cost reality corrected
+
+The decision (Gemini 2.0 Flash primary, Qwen2.5-VL fallback, both via OpenRouter) **stands** — this is a maintenance correction, not a relitigation.
+
+- **Model id:** `google/gemini-2.0-flash-exp` was **retired by OpenRouter** and now returns `404 "No endpoints found"`. Extraction had been failing silently in production (upload `200`, `/api/extract` `502`, the receipt draft showing "Couldn't read this receipt", nothing persisted). Primary id is now the GA `google/gemini-2.0-flash-001` (verified live; same Gemini 2.0 Flash model). Fallback `qwen/qwen2.5-vl-72b-instruct` was checked and is still valid.
+- **Cost reality:** the "currently free" / "free-tier 1500/day" framing above is **no longer accurate**. The free experimental model is gone; `gemini-2.0-flash-001` is a low-cost **paid** model billed via OpenRouter credit (~fractions of a cent per receipt; the project's OpenRouter key is a paid, non-free-tier key). The "if Google's pricing changes, revisit" trigger in the original rationale is effectively moot — we are already on the cheap paid path. CLAUDE.md and docs/ai-prompts.md updated to match.
+- **Resilience bug fixed alongside:** `lib/ai/extract.ts` `tryProvider` had always returned `kind: 'transient'` even for fatal 4xx, so the dead-model 404 was masked as a generic `provider_unavailable`/`429` — which is why this went undiagnosed for a long time. A fatal primary now falls through to the fallback (a retired primary id can't take extraction down on its own) and the true `lastStatus` is surfaced.
