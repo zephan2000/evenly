@@ -36,6 +36,7 @@ import {
   sumHomeAmountConfident,
 } from '@/lib/db/expenses';
 import { createTripWithMembers, listTrips, type TripRecord } from '@/lib/db/trips';
+import { listTripMembers } from '@/lib/db/trip-members';
 import { formatMinor } from '@/lib/fx/currency';
 import { getCurrentTripId, setCurrentTripId } from '@/lib/storage/current-trip';
 const VISIBLE_CATEGORY_KEYS: CategoryKey[] = [
@@ -120,6 +121,13 @@ function sortExpenses(a: ExpenseRecord, b: ExpenseRecord): number {
   return b.created_at.localeCompare(a.created_at);
 }
 
+// Hero supporting line: who's on the trip. Capped so a big group doesn't
+// turn the calm hero into a wall of names — first 3 + "+N more".
+function formatMemberLine(names: string[]): string {
+  if (names.length <= 4) return names.join(', ');
+  return `${names.slice(0, 3).join(', ')} +${names.length - 3} more`;
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { getToken, isSignedIn } = useAuth();
@@ -134,6 +142,8 @@ export default function HomeScreen() {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [expensesState, setExpensesState] = useState<ExpensesState>({ kind: 'idle' });
   const [balances, setBalances] = useState<TripBalances | null>(null);
+  // Member display names for the selected trip — drives the hero subtitle.
+  const [memberNames, setMemberNames] = useState<string[]>([]);
 
   // Refs so loadTrips can read the latest selectedTripId in its error
   // fallback without listing it in its useCallback deps — otherwise every
@@ -164,13 +174,15 @@ export default function HomeScreen() {
     if (!tripId) {
       setExpensesState({ kind: 'ready', expenses: [] });
       setBalances(null);
+      setMemberNames([]);
       return;
     }
     setExpensesState({ kind: 'loading' });
     try {
-      // Expenses + balances in parallel — both come off the same trip and
-      // the user sees the Settle softly card alongside Recent expenses.
-      const [expenses, nextBalances] = await Promise.all([
+      // Expenses + balances + members in parallel — all come off the same
+      // trip. Members drive the hero subtitle; like balances it soft-fails
+      // so the hero keeps rendering if that endpoint is unavailable.
+      const [expenses, nextBalances, members] = await Promise.all([
         listExpenses(() => getTokenRef.current(), tripId),
         getTripBalances(() => getTokenRef.current(), tripId).catch((err) => {
           // Soft-fail balances. The hero + recent expenses must keep
@@ -179,9 +191,14 @@ export default function HomeScreen() {
           console.warn('[home] balances fetch failed:', err);
           return null;
         }),
+        listTripMembers(() => getTokenRef.current(), tripId).catch((err) => {
+          console.warn('[home] members fetch failed:', err);
+          return [];
+        }),
       ]);
       setExpensesState({ kind: 'ready', expenses });
       setBalances(nextBalances);
+      setMemberNames(members.map((m) => m.display_name));
     } catch (e) {
       setExpensesState({
         kind: 'error',
@@ -336,6 +353,15 @@ export default function HomeScreen() {
     selectedTrip?.name ?? (hasTrips ? 'evenly' : 'create your first to start tracking');
   const heroMetaRight =
     hasTrips && trips.length > 1 ? 'switch trip' : hasTrips ? 'shared trip' : 'tap below';
+  // The trip IS the headline now (UX feedback 2026-05-19); members are the
+  // supporting line. No-trips state keeps the brand placeholder since there
+  // is no trip name yet. Subtitle falls back to the calm brand line until
+  // members resolve (soft-fail) so the hero never renders an empty line.
+  const heroHeadline = selectedTrip?.name ?? (hasTrips ? 'evenly' : 'breezy\nsplits');
+  const heroSubtitle =
+    memberNames.length > 0
+      ? formatMemberLine(memberNames)
+      : 'Keep the trip light. Let the math stay in the background.';
 
   return (
     <AppScreen>
@@ -349,8 +375,8 @@ export default function HomeScreen() {
           metaLeft={heroMetaLeft}
           metaCenter={heroMetaCenter}
           metaRight={heroMetaRight}
-          headline={`breezy\nsplits`}
-          subtitle="Keep the trip light. Let the math stay in the background."
+          headline={heroHeadline}
+          subtitle={heroSubtitle}
           headlineStyle={decorativeHeadingStyle.displayXl}
           minHeight={436}
           footer={

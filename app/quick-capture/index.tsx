@@ -29,6 +29,7 @@ import { Banner } from '@/components/ui/banner';
 import { BottomSheet, type BottomSheetHandle } from '@/components/ui/bottom-sheet';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
+import { EmptyIllustration } from '@/components/ui/empty-illustration';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ListRow } from '@/components/ui/list-row';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -563,7 +564,7 @@ export default function QuickCaptureTrayScreen() {
             </>
           ) : trips.length === 0 ? (
             <EmptyState
-              illustration={<Text variant="displayXl">✈️</Text>}
+              illustration={<EmptyIllustration name="bag-suitcase" />}
               title="Create a trip first"
               description="Receipts live inside trips. Make one and you're set."
               cta={{
@@ -573,7 +574,7 @@ export default function QuickCaptureTrayScreen() {
             />
           ) : (
             <EmptyState
-              illustration={<Text variant="displayXl">🧾</Text>}
+              illustration={<EmptyIllustration name="tray-arrow-down" />}
               title="Nothing in the inbox yet"
               description={`Pick up to 8 receipts to start a quick capture for ${currentTrip?.name ?? ''}.`}
               cta={{ label: 'Pick receipts', onPress: handlePickReceipts }}

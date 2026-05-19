@@ -14,6 +14,7 @@ import {
   CategoryIcon,
   Chip,
   CurrencyInput,
+  EmptyIllustration,
   EmptyState,
   ListRow,
   ReceiptThumbnail,
@@ -373,7 +374,7 @@ export default function DevComponentsScreen() {
         <Section title="EmptyState">
           <View style={styles.emptyWrap}>
             <EmptyState
-              illustration={<Text variant="displayXl">🧳</Text>}
+              illustration={<EmptyIllustration name="bag-suitcase" />}
               title="Start a trip to begin"
               description="Create your first trip to track and split receipts."
               cta={{ label: 'Create a trip', onPress: () => {} }}

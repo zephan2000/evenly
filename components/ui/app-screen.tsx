@@ -1,8 +1,8 @@
 import React from 'react';
 import { Platform, ScrollView, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Neutral } from '@/constants/theme';
+import { Neutral, Rhythm } from '@/constants/theme';
 
 export type AppScreenProps = {
   children: React.ReactNode;
@@ -16,11 +16,24 @@ export type AppScreenProps = {
 const isWeb = Platform.OS === 'web';
 
 export function AppScreen({ children, contentContainerStyle }: AppScreenProps) {
+  const insets = useSafeAreaInsets();
+
+  // Reserve bottom space so the last content/CTA clears the floating glass
+  // tab bar (ADR 0011 / design-system §6.3). Token + live safe-area inset:
+  // the pill floats `inset + 12` above the screen edge. Harmless extra
+  // scroll space on screens without the tab bar (sign-in, task screens).
+  const bottomClearance = Rhythm.floatingTabBarClearance + insets.bottom;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={[styles.content, isWeb && styles.contentWeb, contentContainerStyle]}
+        contentContainerStyle={[
+          styles.content,
+          isWeb && styles.contentWeb,
+          { paddingBottom: bottomClearance },
+          contentContainerStyle,
+        ]}
       >
         {children}
       </ScrollView>
@@ -39,7 +52,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 120,
     gap: 20,
   },
   contentWeb: {

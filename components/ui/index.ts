@@ -16,6 +16,8 @@ export { CurrencyInput } from './currency-input';
 export type { CurrencyInputProps } from './currency-input';
 export { EditorialHero } from './editorial-hero';
 export type { EditorialHeroProps } from './editorial-hero';
+export { EmptyIllustration } from './empty-illustration';
+export type { EmptyIllustrationProps } from './empty-illustration';
 export { EmptyState } from './empty-state';
 export type { EmptyStateProps } from './empty-state';
 export { ListRow } from './list-row';
