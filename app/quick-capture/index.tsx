@@ -224,6 +224,26 @@ export default function QuickCaptureTrayScreen() {
   const saved = savedDraftCount(state);
   const allSaved = visibleDrafts.length > 0 && isBatchTerminal(state) && saved > 0;
 
+  // Saved expense ids → used to guide the user into splitting (the actual
+  // next step) instead of dead-ending on a "saved" screen.
+  const savedExpenseIds = useMemo(
+    () =>
+      state.drafts
+        .filter((d) => d.status === 'saved' && d.expenseId)
+        .map((d) => d.expenseId as string),
+    [state.drafts],
+  );
+  const handleSplitNext = useCallback(() => {
+    // One receipt → straight into the split spotlight wizard. Several →
+    // the trip, where each receipt is opened and split (splits are
+    // per-expense, so there's no single batch split target).
+    if (savedExpenseIds.length === 1) {
+      router.replace(`/expenses/${savedExpenseIds[0]}/split`);
+    } else {
+      router.replace('/(tabs)');
+    }
+  }, [savedExpenseIds, router]);
+
   const isRealBatch = visibleDrafts.length > 0;
 
   // Real orchestrator deps. Created lazily — null until we have a signed-in
@@ -637,7 +657,11 @@ export default function QuickCaptureTrayScreen() {
         <Banner
           variant="success"
           title={`All ${saved} saved`}
-          description="Tap Done to head back to the trip."
+          description={
+            savedExpenseIds.length === 1
+              ? 'Next: split it among the group so everyone’s balance is right.'
+              : 'Next: open each receipt on the trip to split it among the group.'
+          }
         />
       ) : null}
 
@@ -690,8 +714,15 @@ export default function QuickCaptureTrayScreen() {
       ) : (
         <View style={styles.footer}>
           <Button
-            label="Done"
+            label={savedExpenseIds.length === 1 ? 'Split now' : 'Review & split'}
             variant="primary"
+            size="md"
+            fullWidth
+            onPress={handleSplitNext}
+          />
+          <Button
+            label="Done"
+            variant="ghost"
             size="md"
             fullWidth
             onPress={() => router.replace('/(tabs)')}
