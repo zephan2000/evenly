@@ -16,7 +16,8 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ import { Card } from '@/components/ui/card';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { Brand, Neutral, Space } from '@/constants/theme';
+import { Brand, Neutral, Rhythm, Shadow, Space } from '@/constants/theme';
 import { formatMinor, getCurrencyDecimals } from '@/lib/fx/currency';
 import { getExpense, type ExpenseDetail } from '@/lib/db/expenses';
 import { saveExpenseSplits } from '@/lib/db/splits';
@@ -111,9 +112,19 @@ export default function SplitExpenseScreen() {
         <Stack.Screen options={stackOptions} />
         <ScrollView contentContainerStyle={styles.content}>
           <Skeleton width="60%" height={28} />
-          <Skeleton fullWidth height={120} radius={16} />
+          <Skeleton width="40%" height={14} />
+          <Skeleton fullWidth height={140} radius={16} />
           <Skeleton fullWidth height={120} radius={16} />
         </ScrollView>
+        {/* Footer skeleton so the loading shell shows the action bar too. */}
+        <View style={styles.footer}>
+          <View style={styles.footerActions}>
+            <Skeleton width={96} height={44} radius={12} />
+            <View style={styles.skeletonFlex}>
+              <Skeleton fullWidth height={44} radius={12} />
+            </View>
+          </View>
+        </View>
       </View>
     );
   }
@@ -150,6 +161,43 @@ export default function SplitExpenseScreen() {
     );
   }
 
+  // Empty state (C7 state matrix): a total-only receipt has nothing to
+  // split per item. Don't drop the user into a degenerate wizard — short-
+  // circuit with an explanation + a way back to the expense.
+  if (loadState.detail.items.length === 0) {
+    return (
+      <View style={styles.screen}>
+        <Stack.Screen options={stackOptions} />
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.headerBlock}>
+            <Text variant="display">Split expense</Text>
+            <Text variant="caption" color="textSecondary">
+              {loadState.detail.expense.merchant || 'Receipt'} ·{' '}
+              {loadState.detail.expense.expense_date}
+            </Text>
+          </View>
+          <Banner
+            variant="info"
+            title="Nothing to split"
+            description="This receipt has no line items, so there's nothing to assign per person. Open the expense to review or edit it."
+          />
+        </ScrollView>
+        <View style={styles.footer}>
+          <View style={styles.footerActions}>
+            <Button label="Back" variant="secondary" size="md" onPress={() => router.back()} />
+            <Button
+              label="Open expense"
+              variant="primary"
+              size="md"
+              fullWidth
+              onPress={() => router.replace(`/expenses/${expenseId}`)}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <SplitEditor
       detail={loadState.detail}
@@ -180,6 +228,7 @@ function SplitEditor({
 }) {
   const { expense, items } = detail;
   const { getToken } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // Map server records → reducer's domain shape (bigint amounts).
   const splittingMembers: SplittingMember[] = useMemo(
@@ -389,7 +438,7 @@ function SplitEditor({
         />
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Space[12] + insets.bottom }]}>
         <View style={styles.footerActions}>
           <Button
             label="Cancel"
@@ -796,11 +845,17 @@ const styles = StyleSheet.create({
     backgroundColor: Neutral.surface,
     paddingHorizontal: Space[16],
     paddingVertical: Space[12],
+    minHeight: Rhythm.stickySaveBarHeight,
+    justifyContent: 'center',
+    ...(Shadow.sm as ViewStyle),
   },
   footerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space[12],
+  },
+  skeletonFlex: {
+    flex: 1,
   },
 });
 
