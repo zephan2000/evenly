@@ -75,6 +75,13 @@ const CATEGORY_OPTIONS: { value: (typeof CATEGORIES)[number]; label: string }[] 
   { value: 'other', label: 'Other' },
 ];
 
+// One-tap date shortcuts (Codex P2-3). Receipts are nearly always entered
+// the same or next day; typing YYYY-MM-DD by hand is the slow path.
+const DATE_SHORTCUTS: { label: string; daysAgo: number }[] = [
+  { label: 'Today', daysAgo: 0 },
+  { label: 'Yesterday', daysAgo: 1 },
+];
+
 const TAX_MODE_OPTIONS = TAX_MODES_AI.map((m) => ({
   value: m,
   label: m === 'inclusive' ? 'Inclusive' : m === 'exclusive' ? 'Exclusive' : 'None',
@@ -201,14 +208,30 @@ export function ExpenseEditForm({
             </View>
           </View>
 
-          <TextInput
-            label="Date"
-            value={value.expense_date}
-            onChangeText={(expense_date) => onChange({ expense_date })}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.fieldGroup}>
+            <TextInput
+              label="Date"
+              value={value.expense_date}
+              onChangeText={(expense_date) => onChange({ expense_date })}
+              placeholder="YYYY-MM-DD"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.dateShortcuts}>
+              {DATE_SHORTCUTS.map((s) => {
+                const iso = isoDaysAgo(s.daysAgo);
+                return (
+                  <Chip
+                    key={s.label}
+                    label={s.label}
+                    selected={value.expense_date === iso}
+                    onPress={() => onChange({ expense_date: iso })}
+                    accessibilityLabel={`Set date to ${s.label.toLowerCase()} (${iso})`}
+                  />
+                );
+              })}
+            </View>
+          </View>
 
           <View style={styles.fieldGroup}>
             <Text variant="caption" color="textSecondary">
@@ -465,6 +488,20 @@ export function computeTotalCents(parts: {
   return Number(total);
 }
 
+/**
+ * ISO `YYYY-MM-DD` for N days before today, in the device's local calendar.
+ * Built from local date parts (not `toISOString()`, which is UTC and can be
+ * a day off near midnight) so "Today" always matches the user's calendar.
+ */
+function isoDaysAgo(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ─── Styles ──────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -518,6 +555,10 @@ const styles = StyleSheet.create({
     gap: Space[12],
   },
   fieldGroup: {
+    gap: Space[8],
+  },
+  dateShortcuts: {
+    flexDirection: 'row',
     gap: Space[8],
   },
   categoryRow: {
