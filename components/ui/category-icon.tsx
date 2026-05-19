@@ -4,8 +4,13 @@ import { StyleSheet, View } from 'react-native';
 
 import { Category, type CategoryKey } from '@/constants/theme';
 
+// `restaurant` is a crossed fork+knife — at ~20px in a single dark
+// colour it reads as an orange "✕"/error glyph (UX audit P2-1). Use an
+// unambiguous food glyph. SVG category assets exist (assets/icons/
+// categories) but the project has no react-native-svg infra, so per
+// Codex's own fallback we stay on Ionicons with clearer glyph choices.
 const ICON_MAP: Record<CategoryKey, keyof typeof Ionicons.glyphMap> = {
-  meals: 'restaurant',
+  meals: 'fast-food',
   transport: 'car',
   lodging: 'bed',
   entertainment: 'musical-notes',

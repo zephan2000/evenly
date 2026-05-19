@@ -60,6 +60,15 @@ const SCALE_BY_STATUS: Record<WizardStepStatus, number> = {
 
 const TRANSITION_DURATION_MS = 200;
 
+// Explicit text status so step state is understandable in grayscale and
+// by screen readers — design-system: opacity alone is never the only
+// status signal (UX audit P1-4).
+const STATUS_LABEL: Record<WizardStepStatus, string> = {
+  active: 'Active',
+  completed: 'Done',
+  future: 'Up next',
+};
+
 export const WizardStep = forwardRef<View, WizardStepProps>(function WizardStep(
   {
     id,
@@ -135,9 +144,20 @@ export const WizardStep = forwardRef<View, WizardStepProps>(function WizardStep(
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text variant="caption" color="textSecondary" style={styles.indexLabel}>
-            {`Step ${index + 1} of ${total}`}
-          </Text>
+          <View style={styles.metaRow}>
+            <Text variant="caption" color="textSecondary" style={styles.indexLabel}>
+              {`Step ${index + 1} of ${total}`}
+            </Text>
+            <View style={[styles.statusPill, isActive ? styles.statusPillActive : null]}>
+              <Text
+                variant="chip"
+                color={isActive ? undefined : 'textSecondary'}
+                style={isActive ? styles.statusTextActive : undefined}
+              >
+                {STATUS_LABEL[status]}
+              </Text>
+            </View>
+          </View>
           <Text variant="subtitle" nativeID={`wizard-step-${id}-title`}>
             {title}
           </Text>
@@ -230,6 +250,27 @@ const styles = StyleSheet.create({
   indexLabel: {
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space[8],
+  },
+  statusPill: {
+    paddingHorizontal: Space[8],
+    paddingVertical: 2,
+    borderRadius: Radius.pill,
+    backgroundColor: Neutral.canvas,
+    borderWidth: 1,
+    borderColor: Neutral.borderSubtle,
+  },
+  statusPillActive: {
+    backgroundColor: Brand.washBg,
+    borderColor: Brand.washBg,
+  },
+  statusTextActive: {
+    color: Brand.interactive,
   },
   trailing: {
     minHeight: Rhythm.tapTargetMin,
