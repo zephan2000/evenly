@@ -44,7 +44,7 @@ export default function DevComponentsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Components' }} />
+      <Stack.Screen options={{ title: 'Components', headerShown: true }} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Section title="Text — type scale">
           <Text variant="displayXl" tabularNums>

@@ -75,10 +75,20 @@ export default function RootLayout() {
         <MockFontSetProvider>
           <BottomSheetModalProvider>
             <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <Stack>
+              {/* Default headerShown:false. Every screen opts INTO its own
+                  header via its own <Stack.Screen options> child. This is
+                  why quick-capture (the only task route with a nested
+                  _layout <Stack>) no longer double-headers: the root used
+                  to render its own header for that nested-navigator route
+                  on top of the nested stack's header. With the default off,
+                  only the nested stack's per-screen header shows. */}
+              <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                <Stack.Screen
+                  name="modal"
+                  options={{ presentation: 'modal', title: 'Modal', headerShown: true }}
+                />
                 {/* Task-oriented screens (quick-capture/, expenses/, trips/)
                     are auto-discovered by expo-router from the file system.
                     We deliberately do NOT declare them here as Stack.Screen
