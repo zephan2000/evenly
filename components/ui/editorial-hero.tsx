@@ -87,7 +87,10 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(17, 39, 82, 0.20)',
+    // Deepened 0.20 → 0.42 (UX feedback 2026-05-19): white headline +
+    // subtitle were hard to read on the bright pastoral sky. Calm navy,
+    // not black, so the imagery stays low-noise per design-system §3.5.
+    backgroundColor: 'rgba(17, 39, 82, 0.42)',
   },
   content: {
     flex: 1,
