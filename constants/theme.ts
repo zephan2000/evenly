@@ -159,6 +159,10 @@ export const Rhythm = {
   stickySaveBarMinSafeArea: 16,
   bottomContentPaddingWithStickyBar: 96,
   tapTargetMin: 44,
+  // Bottom scroll padding on tab screens so the last content/CTA clears the
+  // floating glass tab bar (ADR 0011). Add the safe-area bottom inset on top
+  // of this — the pill footprint is ~72pt + 12pt gap + inset.
+  floatingTabBarClearance: 112,
 } as const;
 
 // Three shadow tokens. Borders carry most structure; shadows are reserved.

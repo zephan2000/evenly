@@ -100,37 +100,38 @@ Tracked, not built. The same palette will rotate to a darker neutral set; brand 
 
 ## 4. Typography
 
-**Primary UI sans: Open Sauce One.** **Public alternate sans: Plus Jakarta Sans.** **Public display accents: Fraunces or Peace Sans, depending surface.** Loaded via `expo-font` in `app/_layout.tsx` from `assets/fonts/`.
+**Primary UI sans: Geist.** **Decorative display accents: Peace Sans or Fraunces, depending mood.** Public alternates may still be explored, but the product default is the Geist-centered system. Loaded via `expo-font` in `app/_layout.tsx` from `assets/fonts/`.
 
-System rule: the product is still a utility app, so expressive display fonts are used selectively. Dense form surfaces, tables, list rows, and settings remain in the UI sans. Display fonts appear only where they add memory and warmth without hurting scan speed.
+System rule: the product is still a utility app, so expressive display fonts are used extremely selectively. Dense form surfaces, tables, list rows, settings, and money values remain in Geist. Decorative fonts appear only in intentionally branded hero copy where warmth matters more than scan speed.
 
 ### 4.0 Font pairing policy
 
-- **Default pairing**: Open Sauce One + Fraunces
-- **Alternate pairing**: Open Sauce One + Peace Sans
-- **If Open Sauce is unavailable**: Plus Jakarta Sans may substitute for the sans role
-- **Fraunces** is the public substitute for the original Cooper-like direction: warm, editorial, soft, and premium
-- **Peace Sans** is for bolder, geometric hero treatments where Cooper feels too soft
+- **Default pairing**: Geist + Peace Sans
+- **Alternate pairing**: Geist + Fraunces
+- **Geist** owns product clarity: body copy, operational UI, labels, form fields, chips, and all important numerals
+- **Fraunces** is the warm, postcard-like decorative option: softer, more romantic, more editorial
+- **Peace Sans** is the breezier decorative option: rounder, lighter, more playful without becoming childish
 - `Cooper BT` and `Proxima Nova` are reference inspirations only, not implementation dependencies
-- Never mix Fraunces and Peace Sans on the same screen
+- Never let Fraunces or Peace Sans take over dense product surfaces
 - No monospace numerals as a signature move; the new direction is warmer and less technical
+- Decorative-font customization is allowed, but only for a tiny hero-copy surface area. Users are choosing a **headline mood**, not changing the product typography wholesale.
 
 ### 4.1 Type scale
 
 Hard rule: **no text token below 12pt**. Line-heights specified for every token (matches ux-principles §accessibility floor).
 
-| Token       | Size / line-height | Weight | Family                 | Use                                   |
-| ----------- | ------------------ | ------ | ---------------------- | ------------------------------------- |
-| display-xl  | 40 / 44            | 700    | Fraunces or Peace Sans | hero headlines only; use sparingly    |
-| display     | 28 / 34            | 700    | Open Sauce One         | screen titles                         |
-| title       | 22 / 28            | 600    | Open Sauce One         | section titles                        |
-| subtitle    | 17 / 24            | 600    | Open Sauce One         | row titles, labels                    |
-| body        | 15 / 22            | 400    | Open Sauce One         | default body                          |
-| body-strong | 15 / 22            | 600    | Open Sauce One         | inline emphasis, inline money amounts |
-| caption     | 13 / 18            | 400    | Open Sauce One         | metadata, timestamps, utility copy    |
-| chip        | 12 / 16            | 600    | Open Sauce One         | chip labels, tags                     |
+| Token       | Size / line-height | Weight | Family                         | Use                                                                |
+| ----------- | ------------------ | ------ | ------------------------------ | ------------------------------------------------------------------ |
+| display-xl  | 40 / 44            | 700    | Geist, Peace Sans, or Fraunces | one branded hero phrase only; decorative choice is user-selectable |
+| display     | 28 / 34            | 700    | Geist                          | screen titles, large totals                                        |
+| title       | 22 / 28            | 600    | Geist                          | section titles                                                     |
+| subtitle    | 17 / 24            | 600    | Geist                          | row titles, labels                                                 |
+| body        | 15 / 22            | 400    | Geist                          | default body                                                       |
+| body-strong | 15 / 22            | 500    | Geist                          | inline emphasis, inline money amounts                              |
+| caption     | 13 / 18            | 400    | Geist                          | metadata, timestamps, utility copy                                 |
+| chip        | 12 / 16            | 600    | Geist                          | chip labels, tags                                                  |
 
-Inline money amounts use `body-strong` with `font-variant-numeric: tabular-nums` so columns align without looking technical. Hero totals also remain sans unless a specific marketing surface calls for stronger display treatment.
+Inline money amounts use `body-strong` with `font-variant-numeric: tabular-nums` so columns align without looking technical. Important totals remain Geist even when a decorative headline mood is selected.
 
 ### 4.2 Dynamic Type
 
@@ -148,7 +149,7 @@ On native, focus rings come from the platform (no override).
 
 ### 4.4 Wordmark
 
-"Evenly" set in **Fraunces** for the hero register and **Open Sauce One 700** for utility contexts. No standalone mark for milestone 1. The wordmark should feel soft, recognizable, and slightly nostalgic rather than geometric-tech.
+"Evenly" stays in **Geist 700** for milestone 1 product surfaces. Decorative fonts belong to supporting hero phrases rather than the operational wordmark. No standalone mark for milestone 1.
 
 ## 5. Spacing, radii, elevation, component rhythm
 
@@ -193,9 +194,13 @@ Borders carry most structure on light. Three shadow tokens:
 - `shadow-sm`: `0 4px 12px rgb(26 22 37 / 0.06)` — floating bars / sticky save
 - `shadow-glass`: `0 8px 24px rgb(122 90 248 / 0.14)` — hero amount accent glow
 
-## 6. Liquid Glass — two spots only
+## 6. Liquid Glass — three spots
 
-Restraint won the Codex argument. M1 ships glass at exactly two places:
+Restraint won the Codex argument; M1 shipped glass at exactly two places.
+The bottom tab bar was added as a third (owner-directed, **ADR 0011** —
+overrides the original "two spots only" scope). It remains a closed list:
+glass is allowed only at the three spots below, nowhere else (§13
+anti-pattern still stands for everything outside this list).
 
 ### 6.1 Hero amount block
 
@@ -211,11 +216,28 @@ Restraint won the Codex argument. M1 ships glass at exactly two places:
 - 72pt tall + safe-area inset
 - Single `Save expense` button inside, brand-interactive
 
-Everything else is solid. Cards stay solid white with hairline border. Category icon tiles are flat (§7.5). Tab bars (post-MVP) will get glass when they ship — not specced here.
+### 6.3 Floating tab bar (ADR 0011)
 
-### 6.3 Implementation notes
+- Detached, inset, rounded **floating pill** — `position: absolute`, not in
+  layout flow
+- `<BlurView intensity={70} tint="light" />` over `rgba(255,255,255,0.72)`
+  - `shadow-glass` + a hairline top highlight
+- Mobile and web both get the floating treatment
+- Pointer-safety is load-bearing: the pill is wrapped in a
+  `pointerEvents="box-none"` container so the transparent inset margins pass
+  touches through; only the pill is touchable. Tab screens reserve bottom
+  content padding ≥ pill height + inset so no CTA sits under it. (This is the
+  mitigation for the documented "absolute tab bar eats web CTA taps"
+  regression — see ADR 0011 + `app/(tabs)/_layout.tsx`.)
 
-- `expo-blur` already installed
+Everything else is solid. Cards stay solid white with hairline border. Category icon tiles are flat (§7.5). Glass is the closed three-item list above — nothing else.
+
+### 6.4 Implementation notes
+
+- `expo-blur` (`~15.0.8`) — added 2026-05-19 via ADR 0011. (Earlier revs of
+  this doc claimed it was "already installed"; it was not — no `BlurView`
+  existed and the §6.1/§6.2 spots used translucent colour + `shadow-glass`
+  only.)
 - Hero wash via `expo-linear-gradient` (single 3-stop gradient)
 - Accent glow via a positioned `<View>` with `shadow-glass`
 
@@ -223,21 +245,23 @@ Everything else is solid. Cards stay solid white with hairline border. Category 
 
 Built once via the `frontend-design` skill in C1, reused thereafter. Located in `components/ui/<name>.tsx`.
 
-| Component          | Notes                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Button`           | primary / secondary / ghost; sm / md / lg. Primary = `brand-interactive` bg, white text.                                                   |
-| `TextInput`        | labelled, with error/helper, single + multi-line.                                                                                          |
-| `CurrencyInput`    | numeric keyboard, formats as you type, decimals locked to currency.                                                                        |
-| `Card`             | solid white, hairline border `#E9E7EE`, optional `shadow-xs`.                                                                              |
-| `ListRow`          | leading element (avatar / category icon tile), title, subtitle, trailing money. Height 72pt.                                               |
-| `Chip`             | pill, height 32pt. Optional leading dot in category icon color. Label in `chip 12/600/16`.                                                 |
-| `SegmentedControl` | exclusive multi-option. Active option uses `brand-interactive` bg.                                                                         |
-| `BottomSheet`      | half-screen modal, radius 20 top.                                                                                                          |
-| `Banner`           | info / warning / error inline message; uses semantic palette §3.4.                                                                         |
-| `Skeleton`         | placeholder for loading states.                                                                                                            |
-| `EmptyState`       | illustrated zero-data screen (placeholder illustrations for milestone 1).                                                                  |
-| `CategoryIcon`     | 40pt rounded-12 square, flat fill = category tint, dark glyph in matching dark variant (§3.2). No gradient, no inner highlight, no shadow. |
-| `ReceiptThumbnail` | 56×56 tile, radius 10, border 1px `#E9E7EE`, optional caption below in caption/13/400. Tap to open full preview.                           |
+| Component          | Notes                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`           | primary / secondary / ghost; sm / md / lg. Primary = `brand-interactive` bg, white text.                                                                                        |
+| `TextInput`        | labelled, with error/helper, single + multi-line.                                                                                                                               |
+| `CurrencyInput`    | numeric keyboard, formats as you type, decimals locked to currency.                                                                                                             |
+| `Card`             | solid white, hairline border `#E9E7EE`, optional `shadow-xs`.                                                                                                                   |
+| `ListRow`          | leading element (avatar / category icon tile), title, subtitle, trailing money. Height 72pt.                                                                                    |
+| `Chip`             | pill, height 32pt. Optional leading dot in category icon color. Label in `chip 12/600/16`.                                                                                      |
+| `SegmentedControl` | exclusive multi-option. Active option uses `brand-interactive` bg.                                                                                                              |
+| `BottomSheet`      | half-screen modal, radius 20 top.                                                                                                                                               |
+| `Banner`           | info / warning / error inline message; uses semantic palette §3.4.                                                                                                              |
+| `Skeleton`         | placeholder for loading states.                                                                                                                                                 |
+| `EmptyState`       | illustrated zero-data screen (placeholder illustrations for milestone 1).                                                                                                       |
+| `SpotlightWizard`  | reusable sequential single-task primitive. One active step at a time, completed steps revisitable, future steps non-interactive. Collapse is based on available rendered width. |
+| `WizardStep`       | presentational step block used by `SpotlightWizard`; whole completed row is tappable on touch.                                                                                  |
+| `CategoryIcon`     | 40pt rounded-12 square, flat fill = category tint, dark glyph in matching dark variant (§3.2). No gradient, no inner highlight, no shadow.                                      |
+| `ReceiptThumbnail` | 56×56 tile, radius 10, border 1px `#E9E7EE`, optional caption below in caption/13/400. Tap to open full preview.                                                                |
 
 ## 7.1 Art direction guardrails
 
@@ -368,6 +392,61 @@ Tap "Scan a receipt" on home → OS image picker (`expo-image-picker`, "library 
 └─────────────────────────┘
 ```
 
+### C4b — Quick capture tray
+
+Inbox model for 2–8 receipts. This is not a wizard. Preserve original capture order.
+
+| State        | Treatment                                                                                                      |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| processing   | per-card thumbnail + processing status; footer progress summary                                                |
+| ready        | receipt appears normal; eligible for tray-level save                                                           |
+| needs review | visible under that specific receipt; use warning styling on the card, never reorder the list                   |
+| failed       | card stays in place with retry/discard/full-edit affordances                                                   |
+| all saved    | success banner + done CTA                                                                                      |
+| offline      | banner: "Your selected receipts stay in a local draft on this device. Upload resumes when you're back online." |
+
+```
+┌─────────────────────────┐
+│ Quick capture      🗑    │
+│ Save to Bali Apr 2026 ⌄ │   trip chip, batch-scoped for unsaved receipts only
+│                         │
+│ ┌─────────────────────┐ │
+│ │ [thumb] Dinner      │ │
+│ │ Ready · S$42.80     │ │   stable capture order
+│ └─────────────────────┘ │
+│ ┌─────────────────────┐ │
+│ │ [thumb] Taxi        │ │
+│ │ Needs review        │ │   warning kept on this receipt, not promoted via sorting
+│ └─────────────────────┘ │
+│                         │
+│ 4 ready · 2 need review │
+│ [ Save receipts ]       │   single persistence action
+│ [ Review flagged ]      │   secondary review flow
+└─────────────────────────┘
+```
+
+Quick-capture tray rules:
+
+- Use one tray-level persistence action: `Save receipts`
+- Per-receipt inline editing updates only the local draft; it does not save to the server
+- `Needs review` belongs to the receipt, not the batch
+- Keep cards in original capture order
+- Use inline expansion for lightweight corrections
+- Use full-screen edit only as advanced/manual fallback
+
+Expanded draft card pattern:
+
+- collapsed state: thumbnail, merchant, total, compact status
+- expanded state: merchant, total, date, currency, category
+- actions: `Done`, `Discard`, `Open full edit`
+- only one expanded card at a time
+
+Trip handling in tray:
+
+- unsaved receipts follow the tray/header trip chip
+- saved receipts are already committed expenses
+- if saved and unsaved receipts diverge, show explicit split state in header copy, e.g. `3 saved to Bali · 2 ready for Kyoto`
+
 ### C5 — Edit expense
 
 Single screen. Four stacked sections so the form survives at 375×667.
@@ -391,6 +470,25 @@ Sticky save bar (§6.2) at bottom.
 | saved                 | toast "Saved" → nav to C6 (optimistic)                                                                                                                        |
 | error (save rejected) | rollback nav, `Banner error` above form: "Couldn't save — try again" + retry                                                                                  |
 | offline               | `Banner info` above form: "You're offline — Save will queue when online" or "Save disabled while offline" (decision: queue. Wire in milestone 2; M1 disables) |
+
+#### C5 addendum — quick capture fallback
+
+When C5 is entered from quick capture, it is an advanced/manual correction surface, not the normal path for every receipt.
+
+Use a compact status row above the form:
+
+- dot row in capture order
+- caption: `Receipt {n} of {N} — {merchant}`
+- back returns to tray
+
+Quick-capture C5 rules:
+
+- primary action label is `Done`, not `Save`
+- `Done` updates the local quick-capture draft and returns control to the tray flow
+- actual expense persistence still happens through tray-level `Save receipts`
+- in flagged-review mode, allow `Done & next flagged`
+
+This distinction is important: C5 is editing draft data here, not persisting an expense directly.
 
 ### C6 — Saved expense detail
 
@@ -434,6 +532,75 @@ Read-only confirmation, with edit + delete affordances.
 │   [     Delete       ]  │   text-button; undo toast on tap
 └─────────────────────────┘
 ```
+
+### C7 — Split expense
+
+Single screen, working-register surface. Uses the `SpotlightWizard` primitive rather than a multi-screen flow.
+
+| State                 | Treatment                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| default               | Step 1 active; later steps visible in completed/future treatment from the spotlight primitive           |
+| loading (initial)     | skeleton wizard shell with Step 1 outline + sticky footer                                               |
+| loading (saving)      | `Save splits` spinner in sticky footer; revisit disabled while save is in flight                        |
+| empty (no items)      | short-circuit to Review with `Banner info`: "Nothing to split" + `Edit expense` deep-link               |
+| error (load failed)   | `Banner error` at top + Retry; retain skeleton structure                                                |
+| error (save rejected) | inline `Banner error` above sticky footer; user state preserved                                         |
+| offline (load)        | last-known expense data may render; banner explains offline state                                       |
+| offline (save)        | optimistic queued save treatment; reconcile on reconnect                                                |
+| recomputed            | inline `Banner info`: `Recomputed after expense edit` + short explanation + one-tap `Review split` path |
+
+```
+┌─────────────────────────┐
+│ Cancel      Split expense│
+│ Hawker Heaven · Today   │
+│                         │
+│ ┌─────────────────────┐ │
+│ │ Share groups        │ │   active step
+│ │ All members         │ │   full content visible
+│ │ Suggestion: Z + A   │ │   low-emphasis assistive hint, not applied
+│ └─────────────────────┘ │
+│ ─────────────────────── │
+│ Mains · 2 items         │   completed/future summaries collapse on narrow widths
+│ ─────────────────────── │
+│ Review                  │
+│                         │
+│ [      Save splits    ] │
+└─────────────────────────┘
+```
+
+C7 rules:
+
+- C7 is entered only from a saved expense, never from quick-capture tray
+- Two saved-expense entry affordances may exist, but both land on the same C7 behavior
+- `all members` is the safe default baseline
+- AI grouping suggestions are optional assistive hints only; users explicitly apply them
+- A `Reset to default` affordance returns grouping to the baseline state
+- Tax, service, and tip are never directly editable in splitting
+- Currency control never appears in C7
+- Completed rows are fully tappable
+- Auto-advance never skips incomplete or not-yet-renderable steps
+- Focus moves to the newly active step on auto-advance
+
+#### Spotlight wizard pattern
+
+This is the design-system expression of the locked spotlight behavior used by C7 and future sequential single-task flows.
+
+| Step state | Treatment                                                                     |
+| ---------- | ----------------------------------------------------------------------------- |
+| active     | 100% opacity, accent border, `shadow-xs`, slight scale-up, full interactivity |
+| completed  | 70% opacity, no border, full-row tap target for revisit                       |
+| future     | 30% opacity, no border, non-interactive                                       |
+
+Spotlight rules:
+
+- `currentStepId` is explicit state, not derived from focus
+- Collapse is based on available rendered width, not fixed device class
+- On narrow widths, non-active steps collapse to a one-line summary
+- Auto-advance only happens after a step is actually complete
+- Incomplete fields block advance and use inline error treatment first
+- Motion may reinforce errors, but never be the sole signal
+- On web, focus ring rules from §4.3 still apply
+- Opacity alone is never the only status signal; headers/summaries need explicit text state
 
 ## 9. Interaction patterns
 
@@ -480,29 +647,30 @@ Documented here so we don't drift; each gets its own design pass when built.
 - Final empty-state illustrations (placeholders for milestone 1)
 - Custom-designed wordmark / brand mark (plain Geist 700 for now)
 - Sculpted 3D category icons (gradient + inner highlight + shadow) — milestone 1 uses flat tint tiles per §7. 3D iconography is a polish pass post-MVP when we have proper iconography work scoped.
-- Floating glass tab bar — only relevant once we have multiple tabs
+- ~~Floating glass tab bar — only relevant once we have multiple tabs~~
+  → shipped 2026-05-19 (owner-directed, ADR 0011 + §6.3). No longer deferred.
 
 ## 13. Decisions of record
 
-| #   | Decision                                           | Value                                                                             |
-| --- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
-| 1   | Brand split                                        | `brand-accent` `#A171F5` (decorative) + `brand-interactive` `#7C3AED` (CTAs/text) |
-| 2   | Light default; dark mode tracked                   | yes                                                                               |
-| 3   | Two-step harmonized category palette + dark glyphs | locked (§3.2)                                                                     |
-| 4   | Category color appears on icons + chips ONLY       | locked                                                                            |
-| 5   | Semantic palette separate from category palette    | locked (§3.4)                                                                     |
-| 6   | Hero register has one locked formula               | locked (§3.5)                                                                     |
-| 7   | Primary typeface                                   | Geist                                                                             |
-| 8   | Geist Mono only at display-xl (hero amounts)       | locked                                                                            |
-| 9   | No type token below 12pt                           | locked                                                                            |
-| 10  | Dynamic Type support to ≥120%                      | required                                                                          |
-| 11  | Web focus styling                                  | `2px solid #7C3AED`, 2px offset                                                   |
-| 12  | Liquid Glass scope                                 | hero amount block + sticky save bar (only)                                        |
-| 13  | Category icons                                     | flat tint tile + dark glyph; no gradient/highlight/shadow                         |
-| 14  | Trip create                                        | half-sheet                                                                        |
-| 15  | Edit screen                                        | single screen, four stacked sections (Receipt / Items / Totals / Notes)           |
-| 16  | Saved confirmation                                 | full read-only screen                                                             |
-| 17  | Tab structure (M1)                                 | single tab `Home`                                                                 |
-| 18  | Wordmark                                           | "Evenly" in Geist 700 at display, −2% letter-spacing                              |
-| 19  | Receipt preview                                    | thumbnail tile 56×56 (not chip)                                                   |
-| 20  | State matrix per screen                            | required (§8)                                                                     |
+| #   | Decision                                           | Value                                                                                |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1   | Brand split                                        | `brand-accent` `#A171F5` (decorative) + `brand-interactive` `#7C3AED` (CTAs/text)    |
+| 2   | Light default; dark mode tracked                   | yes                                                                                  |
+| 3   | Two-step harmonized category palette + dark glyphs | locked (§3.2)                                                                        |
+| 4   | Category color appears on icons + chips ONLY       | locked                                                                               |
+| 5   | Semantic palette separate from category palette    | locked (§3.4)                                                                        |
+| 6   | Hero register has one locked formula               | locked (§3.5)                                                                        |
+| 7   | Primary typeface                                   | Geist                                                                                |
+| 8   | Geist Mono only at display-xl (hero amounts)       | locked                                                                               |
+| 9   | No type token below 12pt                           | locked                                                                               |
+| 10  | Dynamic Type support to ≥120%                      | required                                                                             |
+| 11  | Web focus styling                                  | `2px solid` `brand-interactive` (#2457D6), 2px offset — was #7C3AED pre-rebrand (§3) |
+| 12  | Liquid Glass scope                                 | hero amount block + sticky save bar + floating tab bar (closed list — ADR 0011, §6)  |
+| 13  | Category icons                                     | flat tint tile + dark glyph; no gradient/highlight/shadow                            |
+| 14  | Trip create                                        | half-sheet                                                                           |
+| 15  | Edit screen                                        | single screen, four stacked sections (Receipt / Items / Totals / Notes)              |
+| 16  | Saved confirmation                                 | full read-only screen                                                                |
+| 17  | Tab structure (M1)                                 | single tab `Home`                                                                    |
+| 18  | Wordmark                                           | "Evenly" in Geist 700 at display, −2% letter-spacing                                 |
+| 19  | Receipt preview                                    | thumbnail tile 56×56 (not chip)                                                      |
+| 20  | State matrix per screen                            | required (§8)                                                                        |
