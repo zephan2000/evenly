@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/card';
 import { CategoryIcon } from '@/components/ui/category-icon';
 import { Chip } from '@/components/ui/chip';
 import { ReceiptThumbnail } from '@/components/ui/receipt-thumbnail';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { Brand, type CategoryKey, Neutral, Radius, Space } from '@/constants/theme';
@@ -91,10 +92,9 @@ export default function SavedExpenseDetailScreen() {
   const expenseId = params.id || extractIdFromPathname();
   const { getToken, isSignedIn } = useAuth();
 
-  const stackScreenOptions = useMemo(
-    () => ({ title: 'Expense', headerShown: true, headerBackTitle: 'Back' }),
-    [],
-  );
+  // Native header off — ScreenHeader renders the modern in-page title +
+  // back (the default bar carved an ugly system strip over the big title).
+  const stackScreenOptions = useMemo(() => ({ headerShown: false }) as const, []);
 
   const [fetchState, setFetchState] = useState<FetchState>({ kind: 'loading' });
 
@@ -138,8 +138,7 @@ export default function SavedExpenseDetailScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={stackScreenOptions} />
         <ScrollView contentContainerStyle={styles.content}>
-          <Skeleton width="60%" height={28} />
-          <Skeleton width="40%" height={16} />
+          <ScreenHeader title="Expense" onBack={() => router.back()} />
           <Skeleton fullWidth height={120} radius={16} />
           <Skeleton fullWidth height={200} radius={16} />
         </ScrollView>
@@ -152,6 +151,7 @@ export default function SavedExpenseDetailScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={stackScreenOptions} />
         <ScrollView contentContainerStyle={styles.content}>
+          <ScreenHeader title="Expense" onBack={() => router.back()} />
           <Banner
             variant="error"
             title="Couldn't load this expense"
@@ -168,6 +168,7 @@ export default function SavedExpenseDetailScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={stackScreenOptions} />
         <ScrollView contentContainerStyle={styles.content}>
+          <ScreenHeader title="Expense" onBack={() => router.back()} />
           <Banner
             variant="info"
             title="Expense not found"
@@ -194,13 +195,11 @@ export default function SavedExpenseDetailScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={stackScreenOptions} />
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Header — merchant + date */}
-        <View style={styles.headerBlock}>
-          <Text variant="display">{expense.merchant || 'Receipt'}</Text>
-          <Text variant="caption" color="textSecondary">
-            {formatDateLong(expense.expense_date)}
-          </Text>
-        </View>
+        <ScreenHeader
+          title={expense.merchant || 'Receipt'}
+          subtitle={formatDateLong(expense.expense_date)}
+          onBack={() => router.back()}
+        />
 
         {/* Hero amount block */}
         <Card raised style={styles.hero}>
@@ -354,9 +353,6 @@ const styles = StyleSheet.create({
     padding: Space[16],
     gap: Space[16],
     paddingBottom: Space[32],
-  },
-  headerBlock: {
-    gap: Space[4],
   },
   hero: {
     padding: Space[20],
