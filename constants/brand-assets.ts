@@ -9,7 +9,11 @@
 // are kept as aliases so existing consumers need no change; the old
 // specimen jpgs are no longer referenced anywhere.
 
-const heroPastoral = require('@/assets/images/brand/hero-pastoral@3x.png');
+// Base name (not @3x) on purpose: hero-pastoral.png / @2x / @3x form a
+// proper Metro density set, so the base path lets Metro pick the right
+// density on native and the base/@1x on web export. Requiring `@3x`
+// directly is non-idiomatic and risks web-export asset resolution.
+const heroPastoral = require('@/assets/images/brand/hero-pastoral.png');
 
 export const BrandAssets = {
   heroPastoral,
