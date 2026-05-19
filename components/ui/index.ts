@@ -28,6 +28,8 @@ export { SegmentedControl } from './segmented-control';
 export type { SegmentedControlProps, SegmentedOption } from './segmented-control';
 export { SectionHeader } from './section-header';
 export type { SectionHeaderProps } from './section-header';
+export { ScreenHeader } from './screen-header';
+export type { ScreenHeaderProps } from './screen-header';
 export { Skeleton } from './skeleton';
 export type { SkeletonProps } from './skeleton';
 export { SettingsRow } from './settings-row';

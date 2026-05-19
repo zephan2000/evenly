@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -67,10 +68,9 @@ export default function SplitExpenseScreen() {
   const expenseId = params.id || extractIdFromPathname();
   const { getToken, isSignedIn } = useAuth();
 
-  const stackOptions = useMemo(
-    () => ({ title: 'Split expense', headerShown: true, headerBackTitle: 'Back' }),
-    [],
-  );
+  // Native header off — ScreenHeader renders the modern in-page title +
+  // back. The default bar carved an ugly system strip over the big title.
+  const stackOptions = useMemo(() => ({ headerShown: false }) as const, []);
 
   // ─── Load expense + trip members ─────────────────────────────────────
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
@@ -111,8 +111,7 @@ export default function SplitExpenseScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={stackOptions} />
         <ScrollView contentContainerStyle={styles.content}>
-          <Skeleton width="60%" height={28} />
-          <Skeleton width="40%" height={14} />
+          <ScreenHeader title="Split expense" onBack={() => router.back()} />
           <Skeleton fullWidth height={140} radius={16} />
           <Skeleton fullWidth height={120} radius={16} />
         </ScrollView>
@@ -134,6 +133,7 @@ export default function SplitExpenseScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={stackOptions} />
         <ScrollView contentContainerStyle={styles.content}>
+          <ScreenHeader title="Split expense" onBack={() => router.back()} />
           <Banner
             variant="error"
             title="Couldn't load this expense"
@@ -150,6 +150,7 @@ export default function SplitExpenseScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={stackOptions} />
         <ScrollView contentContainerStyle={styles.content}>
+          <ScreenHeader title="Split expense" onBack={() => router.back()} />
           <Banner
             variant="info"
             title="Expense not found"
@@ -169,13 +170,11 @@ export default function SplitExpenseScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={stackOptions} />
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.headerBlock}>
-            <Text variant="display">Split expense</Text>
-            <Text variant="caption" color="textSecondary">
-              {loadState.detail.expense.merchant || 'Receipt'} ·{' '}
-              {loadState.detail.expense.expense_date}
-            </Text>
-          </View>
+          <ScreenHeader
+            title="Split expense"
+            subtitle={`${loadState.detail.expense.merchant || 'Receipt'} · ${loadState.detail.expense.expense_date}`}
+            onBack={() => router.back()}
+          />
           <Banner
             variant="info"
             title="Nothing to split"
@@ -211,7 +210,7 @@ export default function SplitExpenseScreen() {
 
 // ─── Editor (mounted once data is ready) ─────────────────────────────────
 
-type StackOptions = ReturnType<typeof useMemo<{ title: string }>>;
+type StackOptions = { readonly headerShown: boolean };
 
 function SplitEditor({
   detail,
@@ -418,12 +417,11 @@ function SplitEditor({
     <View style={styles.screen}>
       <Stack.Screen options={stackOptions} />
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.headerBlock}>
-          <Text variant="display">Split expense</Text>
-          <Text variant="caption" color="textSecondary">
-            {expense.merchant || 'Receipt'} · {expense.expense_date}
-          </Text>
-        </View>
+        <ScreenHeader
+          title="Split expense"
+          subtitle={`${expense.merchant || 'Receipt'} · ${expense.expense_date}`}
+          onBack={onCancel}
+        />
 
         {saveError ? (
           <Banner variant="error" title="Couldn't save splits" description={saveError} />
@@ -835,9 +833,6 @@ const styles = StyleSheet.create({
     padding: Space[16],
     gap: Space[16],
     paddingBottom: Space[32],
-  },
-  headerBlock: {
-    gap: Space[4],
   },
   footer: {
     borderTopWidth: 1,

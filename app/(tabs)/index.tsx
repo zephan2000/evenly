@@ -548,18 +548,6 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      <Card raised style={styles.noteCard}>
-        <View style={styles.noteIcon}>
-          <Ionicons name="cloud-outline" size={22} color={Brand.interactive} />
-        </View>
-        <View style={styles.noteCopy}>
-          <Text variant="subtitle">Dreamier hero, quieter workflow</Text>
-          <Text variant="body" color="textSecondary">
-            Imagery lives up top. The rest of the product stays calm, white, and easy to scan.
-          </Text>
-        </View>
-      </Card>
-
       {hasTrips ? (
         <HomeTripPickerSheet
           ref={tripPickerRef}
@@ -813,23 +801,6 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     borderWidth: 1.5,
     borderColor: Neutral.borderSubtle,
-  },
-  noteCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-  },
-  noteIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.pill,
-    backgroundColor: Brand.washBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noteCopy: {
-    flex: 1,
-    gap: 4,
   },
 });
 
