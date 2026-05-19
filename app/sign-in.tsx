@@ -1,6 +1,6 @@
 import { useAuth, useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import { Link, Redirect } from 'expo-router';
+import { Redirect } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -301,12 +301,7 @@ export default function SignInScreen() {
           <Banner variant="error" description={errorMessage} />
         ) : infoMessage ? (
           <Banner variant="info" description={infoMessage} />
-        ) : (
-          <Banner
-            variant="info"
-            description="Custom sign-in UI is wired to Clerk. Email-code verification is the next auth screen to add."
-          />
-        )}
+        ) : null}
 
         <View style={styles.formFields}>
           {isPendingVerification ? (
@@ -420,17 +415,6 @@ export default function SignInScreen() {
           />
         </View>
       </Card>
-
-      <Card raised style={styles.helperCard}>
-        <Text variant="subtitle">Notes</Text>
-        <Text variant="body" color="textSecondary">
-          This screen follows the accepted visual system: image-led hero at the top, calm white
-          working surface below, and Geist for the operational UI.
-        </Text>
-        <Link href="/(tabs)/explore" asChild>
-          <Button label="Back to settings" size="md" variant="secondary" />
-        </Link>
-      </Card>
     </AppScreen>
   );
 }
@@ -488,9 +472,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-  },
-  helperCard: {
-    gap: 10,
   },
   previewSteady: {},
   previewBreezy: {
