@@ -434,17 +434,25 @@ export function wizardSteps(state: SplitDraft): WizardStepSkeleton[] {
     });
   }
 
-  // Review is "completed" only after a successful save. It is deliberately
-  // EXEMPT from the reached→completed rule: a "Done" pill on Review before
-  // the user has actually saved would be a lie. Review is the terminal
-  // step, so excluding it can't cause a soft-lock — and Save lives in the
-  // always-visible sticky footer, reachable from any step regardless.
+  // Review follows the same reached→revisitable rule as every other step.
+  // It is NOT exempt: in the common all-default flow the wizard OPENS on
+  // Review, so tapping up to Share groups must leave Review revisitable —
+  // exempting it soft-locked the user on Share groups (live-verified bug,
+  // 2026-05-20). On initial load Review is the current step → 'active', so
+  // it is never a premature "Done"; it only reads completed once the user
+  // has navigated away from a step they've already seen. `reviewDone`
+  // (saved) still independently marks it completed when not reached.
   const reviewDone = state.saveStatus === 'saved';
   out.push({
     id: REVIEW_STEP_ID,
     title: 'Review',
     kind: 'review',
-    status: statusFor(state.currentStepId, REVIEW_STEP_ID, reviewDone, false),
+    status: statusFor(
+      state.currentStepId,
+      REVIEW_STEP_ID,
+      reviewDone,
+      state.reachedStepIds.includes(REVIEW_STEP_ID),
+    ),
   });
 
   return out;
