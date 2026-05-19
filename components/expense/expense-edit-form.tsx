@@ -48,6 +48,11 @@ export type ExpenseEditFormProps = {
   /** Force-disable (e.g. validation failure). Pending implies disabled. */
   primaryActionDisabled?: boolean;
 
+  /** True when the values came from an AI scan (not hand-typed). Shows a
+   *  persistent reminder that extraction can misread digits — verify before
+   *  saving. Off for manual entry (nothing was scanned). */
+  aiAssisted?: boolean;
+
   /** Optional slot rendered above the form (e.g. QC batch dot row). */
   statusRow?: React.ReactNode;
   /** Optional slot rendered between status row and form (banners). */
@@ -97,6 +102,7 @@ export function ExpenseEditForm({
   onPrimaryAction,
   primaryActionPending = false,
   primaryActionDisabled = false,
+  aiAssisted = false,
   statusRow,
   topBanner,
   payerSection,
@@ -185,6 +191,17 @@ export function ExpenseEditForm({
             variant="warning"
             title="Please verify these values."
             description="Confidence was low on this extraction. Touching any field clears the flag."
+          />
+        ) : null}
+
+        {/* AI scans can misread digits (an extra 0, a wrong total) even at
+            high confidence — persistent reminder to verify. Suppressed when
+            the low-confidence warning above already says the same thing. */}
+        {aiAssisted && !showLowConfidence ? (
+          <Banner
+            variant="info"
+            title="Double-check the scan"
+            description="AI extraction isn't perfect — it can misread digits, like adding an extra 0. Confirm the amounts before saving."
           />
         ) : null}
 

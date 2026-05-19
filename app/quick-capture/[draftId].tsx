@@ -144,6 +144,7 @@ export default function QuickCaptureBatchModeScreen() {
         value={draft.extracted}
         onChange={handleApplyEdit}
         receiptImage={draft.imageUri || undefined}
+        aiAssisted
         primaryActionLabel={primaryActionLabel}
         onPrimaryAction={handleDone}
         onChangeCurrency={() => currencyPickerRef.current?.present()}

@@ -92,6 +92,11 @@ export type SplitDraft = {
   individualItemIds: string[];
   panels: PerPersonPanelDraft[];
   currentStepId: string;
+  /** Every step id the wizard cursor has ever pointed at. A reached step
+   *  stays revisitable even after navigating backward — without this, an
+   *  earlier step's later siblings revert to `future` (non-interactive)
+   *  and the user soft-locks on the step they tapped back into. */
+  reachedStepIds: string[];
   saveStatus: SaveStatus;
   saveError: SplitSaveError | null;
 };
@@ -134,6 +139,13 @@ export type Action =
   | { type: 'SAVE_SUCCEEDED' }
   | { type: 'SAVE_FAILED'; error: SplitSaveError };
 
+// Union a step id into the reached set (order-preserving, deduped). Every
+// place that moves the wizard cursor routes through this so a visited step
+// stays revisitable (see SplitDraft.reachedStepIds / the soft-lock fix).
+function addReached(reached: string[], id: string): string[] {
+  return reached.includes(id) ? reached : [...reached, id];
+}
+
 // ─── Reducer ─────────────────────────────────────────────────────────────
 
 export function reducer(state: SplitDraft, action: Action): SplitDraft {
@@ -147,6 +159,7 @@ export function reducer(state: SplitDraft, action: Action): SplitDraft {
         itemIds: items.map((i) => i.id),
         name: 'All members',
       };
+      const initStep = initialStepId(items, defaultGroup);
       return {
         expenseId: expense.id,
         expense,
@@ -156,7 +169,8 @@ export function reducer(state: SplitDraft, action: Action): SplitDraft {
         shareGroups: [defaultGroup],
         individualItemIds: [],
         panels: [],
-        currentStepId: initialStepId(items, defaultGroup),
+        currentStepId: initStep,
+        reachedStepIds: [initStep],
         saveStatus: 'idle',
         saveError: null,
       };
@@ -260,6 +274,7 @@ export function reducer(state: SplitDraft, action: Action): SplitDraft {
           individualItemIds: [...cleanedIndividual, itemId],
           panels: [...cleanedPanels, panel],
           currentStepId: panelStepId(itemId),
+          reachedStepIds: addReached(state.reachedStepIds, panelStepId(itemId)),
         };
       }
 
@@ -280,6 +295,7 @@ export function reducer(state: SplitDraft, action: Action): SplitDraft {
         individualItemIds: cleanedIndividual,
         panels: cleanedPanels,
         currentStepId: nextStepId,
+        reachedStepIds: addReached(state.reachedStepIds, nextStepId),
       };
     }
 
@@ -334,7 +350,11 @@ export function reducer(state: SplitDraft, action: Action): SplitDraft {
     }
 
     case 'SET_CURRENT_STEP':
-      return { ...state, currentStepId: action.stepId };
+      return {
+        ...state,
+        currentStepId: action.stepId,
+        reachedStepIds: addReached(state.reachedStepIds, action.stepId),
+      };
 
     case 'SAVE_STARTED':
       return { ...state, saveStatus: 'saving', saveError: null };
@@ -390,7 +410,12 @@ export function wizardSteps(state: SplitDraft): WizardStepSkeleton[] {
     id: SHARE_GROUPS_STEP_ID,
     title: 'Share groups',
     kind: 'share_groups',
-    status: statusFor(state.currentStepId, SHARE_GROUPS_STEP_ID, groupsComplete),
+    status: statusFor(
+      state.currentStepId,
+      SHARE_GROUPS_STEP_ID,
+      groupsComplete,
+      state.reachedStepIds.includes(SHARE_GROUPS_STEP_ID),
+    ),
   });
 
   // Per-item panels in stable item sort order
@@ -404,19 +429,22 @@ export function wizardSteps(state: SplitDraft): WizardStepSkeleton[] {
       id,
       title: item.name,
       kind: 'item_panel',
-      status: statusFor(state.currentStepId, id, done),
+      status: statusFor(state.currentStepId, id, done, state.reachedStepIds.includes(id)),
       itemId: item.id,
     });
   }
 
-  // Review is "completed" only after a successful save. Otherwise it
-  // toggles between future/active based on currentStepId.
+  // Review is "completed" only after a successful save. It is deliberately
+  // EXEMPT from the reached→completed rule: a "Done" pill on Review before
+  // the user has actually saved would be a lie. Review is the terminal
+  // step, so excluding it can't cause a soft-lock — and Save lives in the
+  // always-visible sticky footer, reachable from any step regardless.
   const reviewDone = state.saveStatus === 'saved';
   out.push({
     id: REVIEW_STEP_ID,
     title: 'Review',
     kind: 'review',
-    status: statusFor(state.currentStepId, REVIEW_STEP_ID, reviewDone),
+    status: statusFor(state.currentStepId, REVIEW_STEP_ID, reviewDone, false),
   });
 
   return out;
@@ -426,8 +454,14 @@ function statusFor(
   currentStepId: string,
   stepId: string,
   domainComplete: boolean,
+  reached: boolean,
 ): WizardStepSkeleton['status'] {
   if (currentStepId === stepId) return 'active';
+  // A step the cursor has already visited stays `completed` (revisitable)
+  // even if its domain work isn't finished — otherwise navigating back to
+  // an earlier step reverts its siblings to `future` and soft-locks the
+  // user. `future` is reserved for steps not yet reached.
+  if (reached) return 'completed';
   if (domainComplete) return 'completed';
   return 'future';
 }
