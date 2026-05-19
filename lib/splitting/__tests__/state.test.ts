@@ -375,19 +375,21 @@ describe('wizardSteps', () => {
     ]);
   });
 
-  it('marks step status correctly across active / completed / future', () => {
+  it('marks active + completed; a reached step stays revisitable (no soft-lock)', () => {
     let state = reducer(init(), { type: 'MOVE_ITEM_TO_GROUP', itemId: 'i3', groupId: null });
-    // Default currentStepId after MOVE doesn't change — it was REVIEW from init.
-    // The screen normally calls SET_CURRENT_STEP. Drive it here.
+    // init's default group covers every item → the wizard OPENS on Review,
+    // so Review is already reached. MOVE put the cursor on the i3 panel.
     state = reducer(state, { type: 'SET_CURRENT_STEP', stepId: panelStepId('i3') });
     const steps = wizardSteps(state);
     const map = new Map(steps.map((s) => [s.id, s]));
-    // Step 1 is complete (i3 is in the individual bucket), and not active.
+    // Step 1 is domain-complete (i3 individual, rest grouped), not active.
     expect(map.get(SHARE_GROUPS_STEP_ID)!.status).toBe('completed');
     // The i3 panel is active.
     expect(map.get(panelStepId('i3'))!.status).toBe('active');
-    // Review is future (save hasn't happened, panel isn't complete).
-    expect(map.get(REVIEW_STEP_ID)!.status).toBe('future');
+    // Review was reached (wizard opened there) → stays 'completed'
+    // i.e. revisitable. Exempting it here is exactly what soft-locked the
+    // user on an earlier step (live-verified 2026-05-20).
+    expect(map.get(REVIEW_STEP_ID)!.status).toBe('completed');
   });
 
   it('keeps exactly one active step at a time', () => {
@@ -401,9 +403,13 @@ describe('wizardSteps', () => {
     }
   });
 
-  it('flips Review to completed only after SAVE_SUCCEEDED', () => {
+  it('Review stays revisitable once reached, then completed after save', () => {
+    // init opens on Review (default group covers all items) → Review is
+    // reached. Navigating up to Share groups must NOT strand the user:
+    // Review stays 'completed' (revisitable), never reverts to 'future'.
+    // This is the soft-lock regression guard.
     let state = reducer(init(), { type: 'SET_CURRENT_STEP', stepId: SHARE_GROUPS_STEP_ID });
-    expect(wizardSteps(state).find((s) => s.id === REVIEW_STEP_ID)!.status).toBe('future');
+    expect(wizardSteps(state).find((s) => s.id === REVIEW_STEP_ID)!.status).toBe('completed');
     state = reducer(state, { type: 'SAVE_SUCCEEDED' });
     expect(wizardSteps(state).find((s) => s.id === REVIEW_STEP_ID)!.status).toBe('completed');
   });
