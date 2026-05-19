@@ -3,7 +3,7 @@ import { Image, type ImageSource } from 'expo-image';
 import React from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { Neutral, Radius } from '@/constants/theme';
+import { Brand, Neutral, Radius } from '@/constants/theme';
 import { Text } from './text';
 
 type Source = ImageSource | string | number | null | undefined;
@@ -102,7 +102,9 @@ export function ReceiptThumbnail({
 }
 
 const webFocusStyle = {
-  outline: '2px solid #7C3AED',
+  // Brand.interactive (#2457D6) — design-system §3 is blue; was a stale
+  // purple #7C3AED from the pre-rebrand palette (UX audit 2026-05-19).
+  outline: `2px solid ${Brand.interactive}`,
   outlineOffset: 2,
   borderRadius: Radius.thumbnail,
 } as unknown as StyleProp<ViewStyle>;
