@@ -56,10 +56,11 @@ CRITICAL RULES:
 2. If tax_mode = "exclusive", subtotal_cents + service_charge_cents + tip_cents + tax_amount_cents MUST equal total_cents (within 1 cent).
 3. If tax_mode = "inclusive", subtotal_cents represents the line items as displayed (already including tax). tax_amount_cents is the embedded tax amount, computed as total - total/(1+tax_rate). If the tax rate is unclear, set tax_amount_cents to 0 and explain in notes. Singapore GST is 9% (effective 2024-01-01); use that as the default rate when SGD + GST signals are present and no other rate is stated.
 4. service_charge is mandatory restaurant fees (typically 10% in Singapore). tip is voluntary. Do not conflate.
-5. Currency: infer from symbols ($, S$, RM, ¥, €, £) and merchant location hints. If genuinely ambiguous, pick the most likely and mention in notes.
-6. Items: extract every line item. If items are not itemized (e.g., total-only receipt), return an empty array and rely on subtotal/total.
-7. Confidence: be honest. If the image is blurry or partial, drop overall to <0.6 so the UI can flag for review.
-8. Return ONLY the JSON object. No code fences. No "Here is the extraction:" prefix.
+5. Currency: infer from symbols ($, S$, RM, ¥, €, £, ₫, ₩) and merchant location hints. If genuinely ambiguous, pick the most likely and mention in notes.
+6. MINOR UNITS — every `*_cents` field is the amount in the currency's minor unit. 2-decimal currencies (SGD/USD/EUR/MYR/GBP/AUD/THB/PHP/INR/IDR/…) × 100 ($14.26 → 1426). ZERO-DECIMAL currencies with no fractional unit (JPY/KRW/VND/CLP/ISK) use the printed amount EXACTLY, NO ×100 (₫562,000 → 562000, ¥1,200 → 1200, NOT 56200000 / 120000). This rule exists because the model intermittently appended two zeros to zero-decimal amounts (it dutifully "converted to cents"); the pipeline stores `*_cents` verbatim as minor units so the inflation surfaced as expenses 100× too large.
+7. Items: extract every line item. If items are not itemized (e.g., total-only receipt), return an empty array and rely on subtotal/total.
+8. Confidence: be honest. If the image is blurry or partial, drop overall to <0.6 so the UI can flag for review.
+9. Return ONLY the JSON object. No code fences. No "Here is the extraction:" prefix.
 ```
 
 ### Validation (server-side, before persisting)
@@ -91,6 +92,7 @@ When you change a prompt:
 - **2026-05-04** — Parser now collapses `tax_mode = "none"` → `"inclusive"` with `tax_amount_cents = 0` before persisting, so the DB enum stays two-valued (`inclusive | exclusive`). Added explicit SG GST default rate (9%) for inclusive-mode embedded-tax math when no rate is stated.
 - **2026-05-04** — Provider chain now routes Gemini Flash through OpenRouter (was direct Google AI Studio API). See ADR 0002 revision for rationale and the single-provider-failure tradeoff.
 - **2026-05-18** — Primary model id `google/gemini-2.0-flash-exp` → `google/gemini-2.0-flash-001`. OpenRouter retired the experimental model (404 "No endpoints found"); extraction had been silently failing in prod (upload 200, `/api/extract` 502, draft → "Couldn't read this receipt", nothing saved). Also fixed `lib/ai/extract.ts` `tryProvider` mislabeling a fatal 4xx as `transient`, which masked the dead model as a generic `provider_unavailable`/429; a fatal primary now falls through to the fallback and the real `lastStatus` is surfaced. No prompt/schema change.
+- **2026-05-18** — Added CRITICAL RULE 6 (minor units / zero-decimal currencies). The model intermittently appended two trailing zeros to zero-decimal-currency amounts (JPY/KRW/VND/CLP/ISK) — it treated `*_cents` literally as "cents" and ×100'd currencies that have no fractional unit. The pipeline stores `*_cents` verbatim as minor units (`lib/fx/currency.ts` decimals are ISO-correct; no code ×100), so the inflation surfaced as expenses 100× too large (e.g. ₫562,000 → ₫56,200,000). Prompt now states explicitly: 2-decimal → ×100; zero-decimal → printed amount as-is, with worked examples. Schema/parser unchanged.
 
 ## Testing
 

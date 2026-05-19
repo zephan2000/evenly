@@ -83,7 +83,7 @@ export default function QuickCaptureTrayScreen() {
   // Memoized so Stack.Screen receives a stable options reference and doesn't
   // call setOptions on every render — that pattern produces an infinite
   // commit-phase loop (React error #185) once the parent re-renders often.
-  const stackScreenOptions = useMemo(() => ({ title: 'Quick capture', headerShown: true }), []);
+  const stackScreenOptions = useMemo(() => ({ title: 'Smart Scan', headerShown: true }), []);
 
   const state = useQuickCaptureState();
   const dispatch = useQuickCaptureDispatch();
